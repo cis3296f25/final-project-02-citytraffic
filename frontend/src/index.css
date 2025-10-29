@@ -1,0 +1,153 @@
+/* --- 1. Tailwind Directives --- */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* --- 2. Fullscreen Styles --- */
+/* Make the app full-screen */
+html,
+body,
+#root {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden; /* Prevent scrollbars */
+}
+
+/* --- 3. Map Container Height (CRITICAL) --- */
+/* THIS IS THE MAIN FIX:
+  Give the map container a 100% height 
+*/
+#map {
+  width: 100%;
+  height: 100vh; /* vh = viewport height */
+}
+
+/* --- 4. Day/Night Mode Filter --- */
+.theme-night .leaflet-tile-pane {
+  filter: brightness(0.6) invert(1) contrast(3) hue-rotate(200deg) saturate(0.3)
+    brightness(0.7);
+}
+
+/* --- 5. Car Icon Styles --- */
+.car-icon {
+  /* This creates the car's shape */
+  width: 18px;
+  height: 30px;
+  border-radius: 8px 8px 4px 4px;
+  border: 2px solid rgba(0, 0, 0, 0.7);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.4);
+
+  /* This centers the icon on its lat/lng coordinate */
+  margin-left: -9px;
+  margin-top: -15px;
+
+  /* The inner div (from App.jsx) will fill this */
+  overflow: hidden;
+}
+
+.car-icon div {
+  /* Adds a "windshield" effect */
+  border-top: 4px solid rgba(0, 0, 0, 0.3);
+}
+
+/* --- 6. Traffic Light Icon Styles --- */
+.traffic-light-icon-container {
+  /* This centers the icon on its lat/lng coordinate */
+  margin-left: -10px;
+  margin-top: -24px;
+}
+
+.traffic-light-icon {
+  width: 20px;
+  height: 48px;
+  background-color: #1a1a1a;
+  border-radius: 6px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-around;
+  align-items: center;
+  padding: 4px 0;
+  border: 1px solid #333;
+}
+
+.traffic-light-icon .light {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background-color: #444; /* 'Off' state */
+  transition: background-color 0.2s, box-shadow 0.2s;
+}
+
+/* 'On' states */
+.traffic-light-icon .light.red {
+  background-color: #ef4444;
+  box-shadow: 0 0 8px #ef4444;
+}
+.traffic-light-icon .light.yellow {
+  background-color: #f59e0b;
+  box-shadow: 0 0 8px #f59e0b;
+}
+.traffic-light-icon .light.green {
+  background-color: #22c55e;
+  box-shadow: 0 0 8px #22c55e;
+}
+
+/* --- 7. Editor Page Layout --- */
+.editor-layout {
+  display: flex;
+  width: 100%;
+  height: 100vh;
+}
+
+.editor-sidebar {
+  width: 250px; /* Fixed sidebar width */
+  height: 100%;
+  background-color: #ffffff;
+  border-right: 1px solid #d1d5db; /* gray-300 */
+  z-index: 1000;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 2px 0 10px rgba(0, 0, 0, 0.1);
+}
+
+/* This is the map ID we used in LayoutEditorPage.jsx */
+#editor-map {
+  flex-grow: 1; /* Map takes up the rest of the space */
+  height: 100%;
+}
+
+.draggable-item {
+  padding: 12px 16px;
+  background-color: #f3f4f6; /* gray-100 */
+  border: 1px solid #e5e7eb; /* gray-200 */
+  border-radius: 8px;
+  margin-bottom: 12px;
+  font-weight: 600;
+  cursor: grab;
+  transition: background-color 0.2s, box-shadow 0.2s;
+}
+
+.draggable-item:hover {
+  background-color: #e5e7eb; /* gray-200 */
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.draggable-item:active {
+  cursor: grabbing;
+  background-color: #d1d5db; /* gray-300 */
+}
+
+/* --- 8. Editor Marker Styles --- */
+/* Simple styles for the markers you drop on the map */
+
+.editor-car-icon,
+.editor-light-icon {
+  font-size: 24px;
+  text-shadow: 0 0 5px rgba(0, 0, 0, 0.5);
+  /* Center the emoji */
+  margin-left: -12px;
+  margin-top: -12px;
+}
