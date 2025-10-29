@@ -40,7 +40,6 @@ Follow these steps to get the development environment running.
     ```bash
     cd backend
     python -m venv venv
-    // or py -m venv venv
     pip install "fastapi[all]" uvicorn
 
     ```
