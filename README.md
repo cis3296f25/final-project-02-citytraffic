@@ -1,6 +1,6 @@
-# Project Name
+# Project Name: City Traffic
 
-Put here a short paragraph describing your project.
+For anyone working in city planning who needs to visualize a traffic situation, the City Traffic Project is a Web-based program that provides a simulation of traffic in a real life location, allows environemtal adjustments, and other options. Unlike other services or simulators, our product provides a simple program with adjustable situations.
 Adding an screenshot or a mockup of your application in action would be nice.
 
 ![This is a screenshot.](images.png)
