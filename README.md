@@ -32,7 +32,7 @@ Follow these steps to get the development environment running.
     npm install
     ```
 
-3.  **Create 2 Terminals**
+3.  **Create 2 Terminals (PowerShell)**
 
 4.  **Setup Virtual Environment using Terminal 1**
     This creates a virtual environment.
@@ -48,7 +48,7 @@ Follow these steps to get the development environment running.
     This starts the backend server.
 
     ```bash
-    uvicorn simulation:app --reload
+    python -m uvicorn simulation:app --reload
     ```
 
 6.  **Run the development server on Terminal 2**
