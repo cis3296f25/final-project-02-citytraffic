@@ -1,4 +1,4 @@
-# Project Name: City Traffic
+# City Traffic
 
 For anyone working in city planning who needs to visualize a traffic situation, the City Traffic Project is a Web-based program that provides a simulation of traffic in a real life location, allows environemtal adjustments, and other options. Unlike other services or simulators, our product provides a simple program with adjustable situations.
 Adding an screenshot or a mockup of your application in action would be nice.
@@ -64,13 +64,4 @@ Follow these steps to get the development environment running.
 
 # How to contribute
 
-Follow this project board to know the latest status of the project: [http://...]([http://...])
-
-### How to build
-
-- Use this github repository: ...
-- Specify what branch to use for a more stable release or for cutting edge development.
-- Use InteliJ 11
-- Specify additional library to download if needed
-- What file and target to compile and run.
-- What is expected to happen when the app start.
+Follow this project board to know the latest status of the project: https://github.com/cis3296f25/final-project-02-citytraffic.git
