@@ -7,6 +7,14 @@ Adding an screenshot or a mockup of your application in action would be nice.
 
 # How to run
 
+## Open Website
+
+To run the project, open the link:
+
+- https://cis3296f25.github.io/final-project-02-citytraffic/
+
+## If you want to run locally
+
 ## Prerequisites
 
 Before you begin, ensure you have the following installed on your system:
@@ -41,7 +49,7 @@ Follow these steps to get the development environment running.
     ```
 
 4.  **Open the application**
-    The terminal will output a URL, typically `http://localhost:5173`. Open this address in your web browser.
+    The terminal will output a URL, typically `http://localhost:5173/final-project-02-citytraffic/`. Open this address in your web browser.
 
 # How to contribute
 
