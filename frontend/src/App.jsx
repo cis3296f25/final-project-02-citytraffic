@@ -41,21 +41,26 @@ const renderCellContent = (cellType) => {
 
 // --- Components ---
 
-/**
- * A single draggable item in the palette
- */
-const DraggableItem = ({ type, label, emoji }) => {
+// --- DraggableItem Component ---
+const DraggableItem = ({ type, label, emoji, selected, onSelect }) => {
   const handleDragStart = (e) => {
-    // Set the drag data to the item's type
     e.dataTransfer.setData("text/plain", type);
     e.dataTransfer.effectAllowed = "move";
+  };
+
+  const handleClick = () => {
+    onSelect(type); // tell the Palette that this item is now selected
   };
 
   return (
     <div
       draggable="true"
       onDragStart={handleDragStart}
-      className="flex flex-col items-center justify-center p-3 m-1 bg-white border-2 border-gray-300 rounded-lg shadow-sm cursor-grab active:cursor-grabbing hover:bg-gray-100 transition-colors"
+      onClick={handleClick}
+      className={`flex flex-col items-center justify-center p-3 m-1 border-2 border-gray-300 rounded-lg shadow-sm cursor-grab transition-colors
+        ${selected ? "translate-y-1 bg-gray-200" : "bg-white"} 
+        hover:bg-gray-100
+      `}
     >
       <span className="text-4xl" role="img" aria-label={label}>
         {emoji}
@@ -65,10 +70,16 @@ const DraggableItem = ({ type, label, emoji }) => {
   );
 };
 
-/**
- * The sidebar palette containing all draggable items
- */
+// --- Palette Component ---
 const Palette = () => {
+  const [selectedType, setSelectedType] = useState(null);
+
+  const handleSelect = (type) => {
+    // If clicking the already selected type, unselect it
+    selectedType === type ? setSelectedType(null) : setSelectedType(type);
+
+  };
+
   return (
     <div className="grid grid-cols-2 gap-2">
       {PALETTE_ITEMS.map((item) => (
@@ -77,11 +88,14 @@ const Palette = () => {
           type={item.type}
           label={item.label}
           emoji={item.emoji}
+          selected={item.type === selectedType} // highlight only the selected item
+          onSelect={handleSelect} // click updates the selected type
         />
       ))}
     </div>
   );
 };
+
 
 /**
  * A single cell in the main grid
