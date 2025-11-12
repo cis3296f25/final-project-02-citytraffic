@@ -499,50 +499,6 @@ const PaletteItem = ({ item, isSelected, onClick }) => {
   );
 };
 
-function LoginForm({
-  onLogin,
-  error,
-  loginUser,
-  setLoginUser,
-  loginPass,
-  setLoginPass,
-}) {
-  return (
-    <form
-      onSubmit={(e) => {
-        e.preventDefault();
-        onLogin();
-      }}
-      className="flex flex-col gap-4 h-full justify-center"
-    >
-      <h2 className="text-lg font-semibold mb-2">Login Required</h2>
-      <input
-        type="text"
-        placeholder="Username"
-        className="p-2 border rounded"
-        value={loginUser}
-        onChange={(e) => setLoginUser(e.target.value)}
-        required
-      />
-      <input
-        type="password"
-        placeholder="Password"
-        className="p-2 border rounded"
-        value={loginPass}
-        onChange={(e) => setLoginPass(e.target.value)}
-        required
-      />
-      <button
-        type="submit"
-        className="px-4 py-2 bg-blue-500 text-white rounded"
-      >
-        Login
-      </button>
-      {error && <span className="text-red-600 text-sm">{error}</span>}
-    </form>
-  );
-}
-
 // --- Main App Component ---
 export default function App() {
   const [rows, setRows] = useState(16);
@@ -784,6 +740,8 @@ export default function App() {
           Clear Grid
         </button>
       </div>
+
+      {/* Grid */}
       <div className="flex-grow flex items-center justify-center p-4 md:p-8 overflow-auto">
         <Grid
           grid={grid}
