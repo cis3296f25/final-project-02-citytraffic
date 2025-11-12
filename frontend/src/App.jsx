@@ -24,7 +24,6 @@ const ROAD_PALETTE_ITEMS = [
 ];
 
 // --- Helper Functions ---
-// Each cell is now { road: null, decoration: null }
 const createEmptyGrid = (rows, cols) =>
   Array.from({ length: rows }, () =>
     Array.from({ length: cols }, () => ({ road: null, decoration: null }))
@@ -37,9 +36,7 @@ const renderCellContent = (cell, neighborInfo) => {
 
   return (
     <div style={{ position: "relative", width: "100%", height: "100%" }}>
-      {/* Render road layer first */}
       {roadType && renderRoadSVG(roadType, neighborInfo)}
-      {/* Render decoration layer on top, if any */}
       {decorationType && renderDecoration(decorationType)}
     </div>
   );
@@ -47,7 +44,6 @@ const renderCellContent = (cell, neighborInfo) => {
 
 // --- Road SVG helper ---
 const renderRoadSVG = (roadType, neighborInfo) => {
-  // ---- All your existing SVG logic ----
   const strokeColor = "#4A5568";
   const strokeWidth = 80;
   const center = 50;
@@ -61,7 +57,6 @@ const renderRoadSVG = (roadType, neighborInfo) => {
   const isRight = neighborInfo.right;
   const neighborCount = isUp + isDown + isLeft + isRight;
 
-  // Intersection logic
   if (roadType === "road_intersection") {
     if (neighborCount === 2) {
       if (isUp && isRight) {
@@ -195,9 +190,7 @@ const renderRoadSVG = (roadType, neighborInfo) => {
     );
   }
 
-  // Straight road logic
   if (roadType === "road_straight") {
-    // Use only up/down OR left/right, or a dot if isolated
     if (neighborInfo.up || neighborInfo.down) {
       paths.push(
         <line
@@ -285,7 +278,7 @@ const renderDecoration = (type) => {
       aria-label={item.label}
       style={{
         position: "absolute",
-        zIndex: 2, // On top of roads
+        zIndex: 2,
         top: 0,
         left: 0,
         width: "100%",
@@ -376,7 +369,6 @@ const Grid = ({
   const cellWidth = TOTAL_GRID_WIDTH_PX / cols;
   const cellHeight = TOTAL_GRID_HEIGHT_PX / rows;
 
-  // Check road types
   const getIsIntersection = (r, c) =>
     grid[r] &&
     grid[r][c] &&
@@ -391,7 +383,6 @@ const Grid = ({
     (grid[r][c].road === "road_intersection" ||
       grid[r][c].road === "road_straight");
 
-  // centerlines (unchanged)
   const centerLines = [];
   const centerLineColor = "#FDE047";
   const centerLineWidth = 4;
@@ -437,8 +428,7 @@ const Grid = ({
         height: `${TOTAL_GRID_HEIGHT_PX}px`,
       }}
     >
-      {/* GridCells */}
-      {grid.flatMap((rowCells, rowIndex) =>
+      {grid.map((rowCells, rowIndex) =>
         rowCells.map((cell, colIndex) => {
           let neighborInfo = null;
 
@@ -519,7 +509,6 @@ const Grid = ({
         })
       )}
 
-      {/* Centerline overlay */}
       <svg
         width={TOTAL_GRID_WIDTH_PX}
         height={TOTAL_GRID_HEIGHT_PX}
@@ -545,7 +534,6 @@ const Grid = ({
   );
 };
 
-// --- Palette Item Component ---
 const PaletteItem = ({ item, isSelected, onClick }) => {
   const handleDragStart = (e) => {
     e.dataTransfer.setData("itemType", item.type);
@@ -557,8 +545,8 @@ const PaletteItem = ({ item, isSelected, onClick }) => {
       onDragStart={handleDragStart}
       onClick={onClick}
       className={`w-full h-auto aspect-square border-2 rounded-lg flex flex-col items-center justify-center cursor-pointer transition-all hover:scale-105 ${isSelected
-          ? "border-blue-500 bg-blue-50 shadow-lg"
-          : "border-gray-300 bg-white hover:border-blue-300"
+        ? "border-blue-500 bg-blue-50 shadow-lg"
+        : "border-gray-300 bg-white hover:border-blue-300"
         }`}
     >
       <span className="text-3xl" role="img" aria-label={item.label}>
@@ -568,6 +556,50 @@ const PaletteItem = ({ item, isSelected, onClick }) => {
     </div>
   );
 };
+
+function LoginForm({
+  onLogin,
+  error,
+  loginUser,
+  setLoginUser,
+  loginPass,
+  setLoginPass,
+}) {
+  return (
+    <form
+      onSubmit={(e) => {
+        e.preventDefault();
+        onLogin();
+      }}
+      className="flex flex-col gap-4 h-full justify-center"
+    >
+      <h2 className="text-lg font-semibold mb-2">Login Required</h2>
+      <input
+        type="text"
+        placeholder="Username"
+        className="p-2 border rounded"
+        value={loginUser}
+        onChange={(e) => setLoginUser(e.target.value)}
+        required
+      />
+      <input
+        type="password"
+        placeholder="Password"
+        className="p-2 border rounded"
+        value={loginPass}
+        onChange={(e) => setLoginPass(e.target.value)}
+        required
+      />
+      <button
+        type="submit"
+        className="px-4 py-2 bg-blue-500 text-white rounded"
+      >
+        Login
+      </button>
+      {error && <span className="text-red-600 text-sm">{error}</span>}
+    </form>
+  );
+}
 
 // --- Main App Component ---
 export default function App() {
@@ -581,10 +613,13 @@ export default function App() {
   const [history, setHistory] = useState(() => [createEmptyGrid(rows, cols)]);
   const [historyIndex, setHistoryIndex] = useState(0);
 
-  // State for palette switching
   const [paletteMode, setPaletteMode] = useState("main");
 
-  // Reset grid when dimensions change
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [loginError, setLoginError] = useState("");
+  const [loginUser, setLoginUser] = useState("");
+  const [loginPass, setLoginPass] = useState("");
+
   useEffect(() => {
     const numRows = Number(rows);
     const numCols = Number(cols);
@@ -597,7 +632,6 @@ export default function App() {
     }
   }, [rows, cols]);
 
-  // --- Layered grid logic for stackable items ---
   const updateGrid = useCallback(
     (row, col, value) => {
       setGrid((prevGrid) => {
@@ -624,7 +658,6 @@ export default function App() {
     [history, historyIndex]
   );
 
-  // Event handlers
   const handleDrop = useCallback(
     (row, col, itemType) => {
       if (itemType === "eraser") {
@@ -699,7 +732,6 @@ export default function App() {
     return () => window.removeEventListener("mouseup", handleGlobalMouseUp);
   }, []);
 
-  // Dimension input handlers
   const handleRowsChange = (e) => {
     const newRows = Math.max(1, parseInt(e.target.value, 10));
     if (!isNaN(newRows)) {
@@ -718,7 +750,6 @@ export default function App() {
     }
   };
 
-  // Palette change handler
   const handlePaletteClick = (type) => {
     if (type === "road_menu") {
       setPaletteMode("road");
@@ -734,84 +765,107 @@ export default function App() {
   const currentPaletteItems =
     paletteMode === "road" ? ROAD_PALETTE_ITEMS : MAIN_PALETTE_ITEMS;
 
+  const handleLogin = useCallback(() => {
+    if (loginUser && loginPass) {
+      setIsAuthenticated(true);
+      setLoginError("");
+    } else {
+      setLoginError("Invalid username or password");
+    }
+  }, [loginUser, loginPass]);
+
   return (
     <div className="flex h-screen bg-gradient-to-br from-blue-50 to-purple-50">
-      {/* Left Sidebar */}
       <div className="w-64 bg-white shadow-lg p-6 flex flex-col">
-        <h1 className="text-2xl font-bold text-gray-800 mb-6">City Builder</h1>
-
-        {/* Dimension Inputs */}
-        <h2 className="text-lg font-semibold text-gray-700 mb-2">Dimensions</h2>
-        <div className="flex gap-2 mb-4">
-          <div className="flex-1">
-            <label htmlFor="rows" className="text-sm font-medium text-gray-600">
-              Rows
-            </label>
-            <input
-              type="number"
-              id="rows"
-              value={rows}
-              onChange={handleRowsChange}
-              className="w-full p-2 border border-gray-300 rounded-lg"
-              min="1"
-            />
-          </div>
-          <div className="flex-1">
-            <label htmlFor="cols" className="text-sm font-medium text-gray-600">
-              Cols
-            </label>
-            <input
-              type="number"
-              id="cols"
-              value={cols}
-              onChange={handleColsChange}
-              className="w-full p-2 border border-gray-300 rounded-lg"
-              min="1"
-            />
-          </div>
-        </div>
-
-        {/* Palette */}
-        <h2 className="text-lg font-semibold text-gray-700 mb-2">Palette</h2>
-        <div className="flex-grow grid grid-cols-2 gap-3">
-          {currentPaletteItems.map((item) => (
-            <PaletteItem
-              key={item.type}
-              item={item}
-              isSelected={selectedTool === item.type}
-              onClick={() => handlePaletteClick(item.type)}
-            />
-          ))}
-        </div>
-
-        {/* Undo/Redo */}
-        <div className="flex gap-2 mb-3">
-          <button
-            onClick={handleUndo}
-            disabled={historyIndex <= 0}
-            className="flex-1 px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-opacity-75 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            ↶ Undo
-          </button>
-          <button
-            onClick={handleRedo}
-            disabled={historyIndex >= history.length - 1}
-            className="flex-1 px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-opacity-75 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            ↷ Redo
-          </button>
-        </div>
-
-        {/* Clear */}
-        <button
-          onClick={handleClearGrid}
-          className="w-full px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-400 focus:ring-opacity-75 transition-colors"
-        >
-          Clear Grid
-        </button>
+        {isAuthenticated ? (
+          <>
+            <h1 className="text-2xl font-bold text-gray-800 mb-6">
+              City Builder
+            </h1>
+            <h2 className="text-lg font-semibold text-gray-700 mb-2">
+              Dimensions
+            </h2>
+            <div className="flex gap-2 mb-4">
+              <div className="flex-1">
+                <label
+                  htmlFor="rows"
+                  className="text-sm font-medium text-gray-600"
+                >
+                  Rows
+                </label>
+                <input
+                  type="number"
+                  id="rows"
+                  value={rows}
+                  onChange={handleRowsChange}
+                  className="w-full p-2 border border-gray-300 rounded-lg"
+                  min="1"
+                />
+              </div>
+              <div className="flex-1">
+                <label
+                  htmlFor="cols"
+                  className="text-sm font-medium text-gray-600"
+                >
+                  Cols
+                </label>
+                <input
+                  type="number"
+                  id="cols"
+                  value={cols}
+                  onChange={handleColsChange}
+                  className="w-full p-2 border border-gray-300 rounded-lg"
+                  min="1"
+                />
+              </div>
+            </div>
+            <h2 className="text-lg font-semibold text-gray-700 mb-2">
+              Palette
+            </h2>
+            <div className="flex-grow grid grid-cols-2 gap-3">
+              {currentPaletteItems.map((item) => (
+                <PaletteItem
+                  key={item.type}
+                  item={item}
+                  isSelected={selectedTool === item.type}
+                  onClick={() => handlePaletteClick(item.type)}
+                />
+              ))}
+            </div>
+            <div className="flex gap-2 mb-3">
+              <button
+                onClick={handleUndo}
+                disabled={historyIndex <= 0}
+                className="flex-1 px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-opacity-75 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                ↶ Undo
+              </button>
+              <button
+                onClick={handleRedo}
+                disabled={historyIndex >= history.length - 1}
+                className="flex-1 px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-opacity-75 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                ↷ Redo
+              </button>
+            </div>
+            <button
+              onClick={handleClearGrid}
+              className="w-full px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-400 focus:ring-opacity-75 transition-colors"
+            >
+              Clear Grid
+            </button>
+          </>
+        ) : (
+          <LoginForm
+            onLogin={handleLogin}
+            error={loginError}
+            loginUser={loginUser}
+            setLoginUser={setLoginUser}
+            loginPass={loginPass}
+            setLoginPass={setLoginPass}
+          />
+        )}
       </div>
-
-      {/* Grid */}
       <div className="flex-grow flex items-center justify-center p-4 md:p-8 overflow-auto">
         <Grid
           grid={grid}
