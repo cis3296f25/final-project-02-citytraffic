@@ -499,6 +499,85 @@ const PaletteItem = ({ item, isSelected, onClick }) => {
   );
 };
 
+const LoginScreen = ({ onLogin }) => {
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+
+  const handleLogin = (e) => {
+    e.preventDefault();
+    onLogin(username, password);
+  };
+
+  return (
+    <div
+      style={{
+        height: "100vh",
+        display: "flex",
+        justifyContent: "center",
+        alignItems: "center",
+        backgroundColor: "#1a1a1a",
+      }}
+    >
+      <div
+        style={{
+          backgroundColor: "#2b2b2b",
+          padding: "2rem",
+          borderRadius: "12px",
+          boxShadow: "0 0 10px rgba(0,0,0,0.3)",
+          width: "300px",
+          textAlign: "center",
+        }}
+      >
+        <h2 style={{ color: "white", marginBottom: "1rem" }}>Login</h2>
+        <input
+          type="text"
+          placeholder="Username"
+          value={username}
+          onChange={(e) => setUsername(e.target.value)}
+          style={{
+            width: "100%",
+            padding: "0.5rem",
+            marginBottom: "1rem",
+            borderRadius: "6px",
+            border: "none",
+          }}
+        />
+        <input
+          type="password"
+          placeholder="Password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          style={{
+            width: "100%",
+            padding: "0.5rem",
+            marginBottom: "1rem",
+            borderRadius: "6px",
+            border: "none",
+          }}
+        />
+        {error && (
+          <p style={{ color: "red", marginBottom: "0.5rem" }}>{error}</p>
+        )}
+        <button
+          onClick={handleLogin}
+          style={{
+            width: "100%",
+            padding: "0.5rem",
+            border: "none",
+            borderRadius: "6px",
+            backgroundColor: "#007bff",
+            color: "white",
+            cursor: "pointer",
+          }}
+        >
+          Login
+        </button>
+      </div>
+    </div>
+  );
+};
+
 // --- Main App Component ---
 export default function App() {
   const [rows, setRows] = useState(16);
@@ -514,7 +593,21 @@ export default function App() {
   // --- NEW: State to manage which palette is shown ---
   const [paletteMode, setPaletteMode] = useState("main");
 
-  // --- *** DELETED THE useEffect that caused the crash *** ---
+  // States for Login Screen
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+
+  // Handle login
+  const handleLogin = (username, password) => {
+    if (!username.trim() || !password.trim()) {
+      alert("Please enter both a username and password.");
+      return;
+    }
+
+    // Example: you could add actual auth logic here later.
+    console.log("Logged in as:", username);
+    setIsLoggedIn(true);
+  };
+
 
   // Wrap updateGrid in useCallback
   const updateGrid = useCallback(
@@ -661,44 +754,46 @@ export default function App() {
   };
 
   // --- NEW: Determine which palette to show ---
-  const currentPaletteItems =
-    paletteMode === "road" ? ROAD_PALETTE_ITEMS : MAIN_PALETTE_ITEMS;
+  const currentPaletteItems = paletteMode === "road" ? ROAD_PALETTE_ITEMS : MAIN_PALETTE_ITEMS;
 
   return (
     <div className="flex h-screen bg-gradient-to-br from-blue-50 to-purple-50">
       {/* Left Sidebar: Palette */}
       <div className="w-64 bg-white shadow-lg p-6 flex flex-col">
-        <h1 className="text-2xl font-bold text-gray-800 mb-6">City Builder</h1>
 
-        {/* Dimension Inputs */}
-        <h2 className="text-lg font-semibold text-gray-700 mb-2">Dimensions</h2>
-        <div className="flex gap-2 mb-4">
-          <div className="flex-1">
-            <label htmlFor="rows" className="text-sm font-medium text-gray-600">
-              Rows
-            </label>
-            <input
-              type="number"
-              id="rows"
-              value={rows}
-              onChange={handleRowsChange}
-              className="w-full p-2 border border-gray-300 rounded-lg"
-              min="1"
-            />
-          </div>
-          <div className="flex-1">
-            <label htmlFor="cols" className="text-sm font-medium text-gray-600">
-              Cols
-            </label>
-            <input
-              type="number"
-              id="cols"
-              value={cols}
-              onChange={handleColsChange}
-              className="w-full p-2 border border-gray-300 rounded-lg"
-              min="1"
-            />
-          </div>
+        {isLoggedIn ? (
+          <>
+           <h1 className="text-2xl font-bold text-gray-800 mb-6">City Builder</h1>
+
+          {/* Dimension Inputs */}
+          <h2 className="text-lg font-semibold text-gray-700 mb-2">Dimensions</h2>
+          <div className="flex gap-2 mb-4">
+            <div className="flex-1">
+              <label htmlFor="rows" className="text-sm font-medium text-gray-600">
+                Rows
+              </label>
+              <input
+                type="number"
+                id="rows"
+                value={rows}
+                onChange={handleRowsChange}
+                className="w-full p-2 border border-gray-300 rounded-lg"
+                min="1"
+              />
+            </div>
+            <div className="flex-1">
+              <label htmlFor="cols" className="text-sm font-medium text-gray-600">
+                Cols
+              </label>
+              <input
+                type="number"
+                id="cols"
+                value={cols}
+                onChange={handleColsChange}
+                className="w-full p-2 border border-gray-300 rounded-lg"
+                min="1"
+              />
+            </div>
         </div>
 
         <h2 className="text-lg font-semibold text-gray-700 mb-2">Palette</h2>
@@ -738,7 +833,11 @@ export default function App() {
           className="w-full px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-400 focus:ring-opacity-75 transition-colors"
         >
           Clear Grid
-        </button>
+        </button> </>
+        ) :
+      (
+        <LoginScreen onLogin={handleLogin}/>
+      )}
       </div>
 
       {/* Grid */}
