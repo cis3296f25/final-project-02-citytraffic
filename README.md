@@ -7,11 +7,19 @@ Adding an screenshot or a mockup of your application in action would be nice.
 
 # How to run
 
+## Open Website
+
+To run the project, open the link:
+
+- https://cis3296f25.github.io/final-project-02-citytraffic/
+
+## If you want to run locally
+
 ## Prerequisites
 
 Before you begin, ensure you have the following installed on your system:
 
-- Node.js (v18.0 or newer)
+- Node.js (v18.0 or newer): https://nodejs.org/en/download
 - npm (which comes with Node.js)
 
 ## Installation Steps
@@ -29,38 +37,19 @@ Follow these steps to get the development environment running.
     This command reads the `package.json` file and installs all required libraries (like React, Leaflet, and React Router).
 
     ```bash
+    cd frontend
     npm install
     ```
 
-3.  **Create 2 Terminals (PowerShell)**
-
-4.  **Setup Virtual Environment using Terminal 1**
-    This creates a virtual environment.
-
-    ```bash
-    cd backend
-    python -m venv venv
-    pip install "fastapi[all]" uvicorn
-
-    ```
-
-5.  **Run the backend server on Terminal 1**
-    This starts the backend server.
-
-    ```bash
-    python -m uvicorn simulation:app --reload
-    ```
-
-6.  **Run the development server on Terminal 2**
+3.  **Run the development server on Terminal**
     This starts the Vite dev server.
 
     ```bash
-    cd frontend
     npm run dev
     ```
 
-7.  **Open the application**
-    The terminal will output a URL, typically `http://localhost:5173`. Open this address in your web browser.
+4.  **Open the application**
+    The terminal will output a URL, typically `http://localhost:5173/final-project-02-citytraffic/`. Open this address in your web browser.
 
 # How to contribute
 
