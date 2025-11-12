@@ -514,18 +514,7 @@ export default function App() {
   // --- NEW: State to manage which palette is shown ---
   const [paletteMode, setPaletteMode] = useState("main");
 
-  // Effect to reset the grid when dimensions change
-  useEffect(() => {
-    const numRows = Number(rows);
-    const numCols = Number(cols);
-
-    if (numRows > 0 && numCols > 0) {
-      const newGrid = createEmptyGrid(numRows, numCols);
-      setGrid(newGrid);
-      setHistory([newGrid]);
-      setHistoryIndex(0);
-    }
-  }, [rows, cols]);
+  // --- *** DELETED THE useEffect that caused the crash *** ---
 
   // Wrap updateGrid in useCallback
   const updateGrid = useCallback(
@@ -625,13 +614,28 @@ export default function App() {
     return () => window.removeEventListener("mouseup", handleGlobalMouseUp);
   }, []);
 
-  // Handlers for dimension inputs
+  // --- *** NEW HELPER FUNCTION TO RESET GRID ATOMICALLY *** ---
+  const resetGridDimensions = (newRows, newCols) => {
+    if (isNaN(newRows) || isNaN(newCols) || newRows <= 0 || newCols <= 0) {
+      return; // Safety check
+    }
+
+    const newGrid = createEmptyGrid(newRows, newCols);
+
+    // Set all states at once
+    setRows(newRows);
+    setCols(newCols);
+    setGrid(newGrid);
+    setHistory([newGrid]); // Reset history with the new grid
+    setHistoryIndex(0);
+  };
+
+  // --- *** MODIFIED Handlers for dimension inputs *** ---
   const handleRowsChange = (e) => {
     const newRows = Math.max(1, parseInt(e.target.value, 10));
     if (!isNaN(newRows)) {
       const newCols = Math.round(newRows * RATIO);
-      setRows(newRows);
-      setCols(newCols);
+      resetGridDimensions(newRows, newCols); // <-- Use the helper
     }
   };
 
@@ -639,8 +643,7 @@ export default function App() {
     const newCols = Math.max(1, parseInt(e.target.value, 10));
     if (!isNaN(newCols)) {
       const newRows = Math.round(newCols / RATIO);
-      setRows(newRows);
-      setCols(newCols);
+      resetGridDimensions(newRows, newCols); // <-- Use the helper
     }
   };
 
