@@ -1,25 +1,27 @@
-// import { defineConfig } from 'vite'
-// import react from '@vitejs/plugin-react'
-
-// // https://vite.dev/config/
-// export default defineConfig({
-//   plugins: [react()],
-// })
-
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [react()],
+  
   //
-  // This is the most important part!
+  // GitHub Pages base path
   //
-  // Replace '<YOUR_REPOSITORY_NAME>' with the name of your GitHub repository.
-  // For example, if your repo is "https://github.com/user/city-sandbox",
-  // you would set base to: "/city-sandbox/"
-  //
-  // *** YOU MUST INCLUDE THE SLASHES AT THE BEGINNING AND END ***
-  //
+  // Replace this with your repo name
   base: "/final-project-02-citytraffic/",
+
+  //
+  // Vitest configuration for testing + coverage
+  //
+  test: {
+    environment: "jsdom",       // Use a DOM-like environment
+    globals: true,              // Enable global test/expect functions
+    setupFiles: "./frontend/test/setupTests.js", // Setup file for jest-dom, etc.
+    coverage: {
+      provider: "v8",           // Fast built-in coverage
+      reporter: ["text", "html"], // Text in terminal + HTML report
+      reportsDirectory: "coverage" // Output folder for coverage report
+    }
+  }
 });
