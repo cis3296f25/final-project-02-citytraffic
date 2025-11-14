@@ -620,6 +620,9 @@ export default function App() {
       return; // Safety check
     }
 
+    console.log(`Grid size changing to: ${newRows} rows, ${newCols} cols`);
+    console.log(`Total Grids: ${newRows * newCols}`);
+
     const newGrid = createEmptyGrid(newRows, newCols);
 
     // Set all states at once
