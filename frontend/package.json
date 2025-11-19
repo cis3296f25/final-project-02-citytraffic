@@ -1,7 +1,27 @@
 {
+  "name": "final-project-02-citytraffic",
+  "version": "1.0.0",
+  "description": "For anyone working in city planning who needs to visualize a traffic situation, the City Traffic Project is a Web-based program that provides a simulation of traffic in a real life location, allows environemtal adjustments, and other options. Unlike other services or simulators, our product provides a simple program with adjustable situations.",
+  "main": "index.js",
+  "type": "commonjs",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "lint": "eslint . --ext js,jsx --report-unused-disable-directives --max-warnings 0",
+    "preview": "vite preview",
+    "test": "vitest",
+    "predeploy": "npm run build",
+    "deploy": "gh-pages -d dist"
+  },
+  "dependencies": {
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "react-scripts": "^0.0.0"
+  },
   "devDependencies": {
     "@babel/preset-env": "^7.28.5",
     "@babel/preset-react": "^7.28.5",
+    "@tailwindcss/postcss": "^4.1.17",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.0",
     "@testing-library/user-event": "^14.6.1",
@@ -14,26 +34,8 @@
     "tailwindcss": "^4.1.17",
     "vitest": "^4.0.10"
   },
-  "dependencies": {
-    "react": "^19.2.0",
-    "react-dom": "^19.2.0",
-    "react-scripts": "^0.0.0"
-  },
-  "name": "final-project-02-citytraffic",
-  "version": "1.0.0",
-  "description": "For anyone working in city planning who needs to visualize a traffic situation, the City Traffic Project is a Web-based program that provides a simulation of traffic in a real life location, allows environemtal adjustments, and other options. Unlike other services or simulators, our product provides a simple program with adjustable situations.\r Adding an screenshot or a mockup of your application in action would be nice.",
-  "main": "index.js",
   "directories": {
     "test": "tests"
-  },
-  "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "lint": "eslint .",
-    "preview": "vite preview",
-    "test": "vitest",
-    "predeploy": "npm run build",
-    "deploy": "gh-pages -d dist"
   },
   "repository": {
     "type": "git",
@@ -42,7 +44,6 @@
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "type": "commonjs",
   "bugs": {
     "url": "https://github.com/cis3296f25/final-project-02-citytraffic/issues"
   },
