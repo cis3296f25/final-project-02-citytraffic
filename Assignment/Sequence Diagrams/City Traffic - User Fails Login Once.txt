@@ -1,0 +1,20 @@
+title City Traffic
+
+participant User
+participant App
+
+User->App: Opens App
+App->Login Screen: <LoginScreen>
+Login Screen-->App: show loginScreen
+User->App: Presses Login Button (fail)
+App->App: handleLogin()
+App->Log: (Please enter both a username and a password)
+User->App: Presses Login Button Again
+App->App: handleLogin()
+App->Log: (Please enter both a username and a password)
+App->(Html calls): create divs and buttons for grid + workbench
+(Html calls)->PaletteItem: create palette
+PaletteItem-->(Html calls): show palette
+(Html calls)->Grid: create grid
+Grid-->(Html calls): show grid
+(Html calls)-->App: screen shows

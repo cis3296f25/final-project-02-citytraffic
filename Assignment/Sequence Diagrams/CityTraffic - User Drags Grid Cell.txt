@@ -1,0 +1,19 @@
+title City Traffic
+
+participant User
+participant App
+
+User->App: Opens App
+App->Login Screen: <LoginScreen>
+Login Screen-->App: show loginScreen
+User->App: Presses Login Button
+App->App: handleLogin()
+App->(Html calls): create divs and buttons for grid + workbench
+(Html calls)->PaletteItem: create palette
+PaletteItem-->(Html calls): show palette
+(Html calls)->Grid: create grid
+Grid-->(Html calls): show grid
+User->App: Drag Item to Grid
+App->Grid Cell: handleDragOver()
+App->Grid Cell: handleDrop()
+Grid Cell-->App: grid cell has been dragged
