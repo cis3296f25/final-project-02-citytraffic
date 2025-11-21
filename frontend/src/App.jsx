@@ -1,11 +1,9 @@
 import React, { useState, useEffect, useCallback } from "react";
 
-// --- Constants ---
 const TOTAL_GRID_WIDTH_PX = 19 * 64;
 const TOTAL_GRID_HEIGHT_PX = 12 * 64;
 const RATIO = 1.5625;
 
-// --- Palettes ---
 const MAIN_PALETTE_ITEMS = [
   { type: "select", label: "Select", emoji: "👆" },
   { type: "road_menu", label: "Road", emoji: "🛣️" },
@@ -17,18 +15,15 @@ const MAIN_PALETTE_ITEMS = [
 ];
 
 const ROAD_PALETTE_ITEMS = [
-  { type: "road_straight", label: "Straight", emoji: "➖" },
+  { type: "road_straight_vertical", label: "Vertical Road", emoji: "⬆️" },
+  { type: "road_straight_horizontal", label: "Horizontal Road", emoji: "➡️" },
   { type: "road_intersection", label: "Intersection", emoji: "➕" },
   { type: "back", label: "Back", emoji: "⬅️" },
 ];
 
-// --- Helper Functions ---
 const createEmptyGrid = (rows, cols) =>
   Array.from({ length: rows }, () => Array(cols).fill(null));
 
-/**
- * Renders the SVG Car with rotation based on direction
- */
 const renderCar = (direction) => {
   let rotation = 0;
   if (direction === "right") rotation = 90;
@@ -36,7 +31,7 @@ const renderCar = (direction) => {
   if (direction === "left") rotation = 270;
 
   return (
-    <g transform={`translate(50, 50) rotate(${rotation}) translate(-25, -30)`}>
+    <g transform={`translate(50,50) rotate(${rotation}) translate(-25,-30)`}>
       <rect x="2" y="4" width="50" height="60" rx="8" fill="rgba(0,0,0,0.2)" />
       <rect x="-4" y="8" width="8" height="12" rx="2" fill="#333" />
       <rect x="46" y="8" width="8" height="12" rx="2" fill="#333" />
@@ -72,148 +67,114 @@ const renderCellContent = (cellData, neighborInfo) => {
   const carDirection = cellData?.hasCar;
   const content = [];
 
-  if (cellType) {
-    const isRoad =
-      cellType === "road_intersection" || cellType === "road_straight";
-    if (!isRoad) {
-      const item =
-        MAIN_PALETTE_ITEMS.find((p) => p.type === cellType) ||
-        ROAD_PALETTE_ITEMS.find((p) => p.type === cellType);
+  const strokeColor = "#4A5568";
+  const strokeWidth = 80;
+  const center = 50;
 
-      if (item) {
-        content.push(
-          <foreignObject key="base" x="0" y="0" width="100" height="100">
-            <div className="w-full h-full flex items-center justify-center text-3xl">
-              {item.emoji}
-            </div>
-          </foreignObject>
-        );
-      }
-    } else {
-      const strokeColor = "#4A5568";
-      const strokeWidth = 80;
-      const center = 50;
-      const { up, down, left, right } = neighborInfo;
-      const neighborCount = up + down + left + right;
-
-      if (cellType === "road_intersection" && neighborCount === 2) {
-        if (up && right) {
-          content.push(
-            <polyline
-              key="ur"
-              points="101,50 50,50 50,-1"
-              stroke={strokeColor}
-              strokeWidth={strokeWidth}
-              strokeLinejoin="round"
-              strokeLinecap="round"
-              fill="none"
-            />
-          );
-        } else if (up && left) {
-          content.push(
-            <polyline
-              key="ul"
-              points="-1,50 50,50 50,-1"
-              stroke={strokeColor}
-              strokeWidth={strokeWidth}
-              strokeLinejoin="round"
-              strokeLinecap="round"
-              fill="none"
-            />
-          );
-        } else if (down && right) {
-          content.push(
-            <polyline
-              key="dr"
-              points="101,50 50,50 50,101"
-              stroke={strokeColor}
-              strokeWidth={strokeWidth}
-              strokeLinejoin="round"
-              strokeLinecap="round"
-              fill="none"
-            />
-          );
-        } else if (down && left) {
-          content.push(
-            <polyline
-              key="dl"
-              points="-1,50 50,50 50,101"
-              stroke={strokeColor}
-              strokeWidth={strokeWidth}
-              strokeLinejoin="round"
-              strokeLinecap="round"
-              fill="none"
-            />
-          );
-        }
-      }
-
-      if (content.length === 0) {
-        if (up)
-          content.push(
-            <line
-              key="up"
-              x1={center}
-              y1={center}
-              x2={center}
-              y2={-1}
-              stroke={strokeColor}
-              strokeWidth={strokeWidth}
-              strokeLinecap="round"
-            />
-          );
-        if (down)
-          content.push(
-            <line
-              key="down"
-              x1={center}
-              y1={center}
-              x2={center}
-              y2={101}
-              stroke={strokeColor}
-              strokeWidth={strokeWidth}
-              strokeLinecap="round"
-            />
-          );
-        if (left)
-          content.push(
-            <line
-              key="left"
-              x1={center}
-              y1={center}
-              x2={-1}
-              y2={center}
-              stroke={strokeColor}
-              strokeWidth={strokeWidth}
-              strokeLinecap="round"
-            />
-          );
-        if (right)
-          content.push(
-            <line
-              key="right"
-              x1={center}
-              y1={center}
-              x2={101}
-              y2={center}
-              stroke={strokeColor}
-              strokeWidth={strokeWidth}
-              strokeLinecap="round"
-            />
-          );
-      }
-
-      if (neighborCount === 0 && content.length === 0) {
-        content.push(
-          <circle
-            key="dot"
-            cx={center}
-            cy={center}
-            r={strokeWidth / 2}
-            fill={strokeColor}
-          />
-        );
-      }
+  if (cellType === "road_intersection") {
+    const { up, down, left, right } = neighborInfo;
+    // Draw segments based on which roads neighbor the intersection
+    if (up)
+      content.push(
+        <line
+          key="up"
+          x1={center}
+          y1={center}
+          x2={center}
+          y2={-1}
+          stroke={strokeColor}
+          strokeWidth={strokeWidth}
+          strokeLinecap="round"
+        />
+      );
+    if (down)
+      content.push(
+        <line
+          key="down"
+          x1={center}
+          y1={center}
+          x2={center}
+          y2={101}
+          stroke={strokeColor}
+          strokeWidth={strokeWidth}
+          strokeLinecap="round"
+        />
+      );
+    if (left)
+      content.push(
+        <line
+          key="left"
+          x1={center}
+          y1={center}
+          x2={-1}
+          y2={center}
+          stroke={strokeColor}
+          strokeWidth={strokeWidth}
+          strokeLinecap="round"
+        />
+      );
+    if (right)
+      content.push(
+        <line
+          key="right"
+          x1={center}
+          y1={center}
+          x2={101}
+          y2={center}
+          stroke={strokeColor}
+          strokeWidth={strokeWidth}
+          strokeLinecap="round"
+        />
+      );
+    if (!(up || down || left || right)) {
+      content.push(
+        <circle
+          key="dot"
+          cx={center}
+          cy={center}
+          r={strokeWidth / 2}
+          fill={strokeColor}
+        />
+      );
+    }
+  } else if (cellType === "road_straight_vertical") {
+    content.push(
+      <line
+        key="vertical"
+        x1={center}
+        y1={-1}
+        x2={center}
+        y2={101}
+        stroke={strokeColor}
+        strokeWidth={strokeWidth}
+        strokeLinecap="round"
+      />
+    );
+  } else if (cellType === "road_straight_horizontal") {
+    content.push(
+      <line
+        key="horizontal"
+        x1={-1}
+        y1={center}
+        x2={101}
+        y2={center}
+        stroke={strokeColor}
+        strokeWidth={strokeWidth}
+        strokeLinecap="round"
+      />
+    );
+  } else if (cellType) {
+    const item =
+      MAIN_PALETTE_ITEMS.find((p) => p.type === cellType) ||
+      ROAD_PALETTE_ITEMS.find((p) => p.type === cellType);
+    if (item) {
+      content.push(
+        <foreignObject key="base" x="0" y="0" width="100" height="100">
+          <div className="w-full h-full flex items-center justify-center text-3xl">
+            {item.emoji}
+          </div>
+        </foreignObject>
+      );
     }
   }
 
@@ -234,7 +195,6 @@ const renderCellContent = (cellData, neighborInfo) => {
   );
 };
 
-// --- Grid Cell Component ---
 const GridCell = React.memo(
   ({
     cellData,
@@ -284,7 +244,6 @@ const GridCell = React.memo(
   }
 );
 
-// --- Grid Component ---
 const Grid = ({
   grid,
   rows,
@@ -297,20 +256,29 @@ const Grid = ({
   const cellWidth = TOTAL_GRID_WIDTH_PX / cols;
   const cellHeight = TOTAL_GRID_HEIGHT_PX / rows;
 
-  const getIsAnyRoad = (r, c) => {
-    if (r < 0 || r >= rows || c < 0 || c >= cols) return false;
-    const cell = grid[r][c];
-    return (
-      cell &&
-      (cell.type === "road_intersection" || cell.type === "road_straight")
-    );
-  };
-
-  const getIsStraight = (r, c) => {
-    if (r < 0 || r >= rows || c < 0 || c >= cols) return false;
-    const cell = grid[r][c];
-    return cell && cell.type === "road_straight";
-  };
+  const getIsVerticalRoad = (r, c) =>
+    r >= 0 &&
+    r < rows &&
+    c >= 0 &&
+    c < cols &&
+    grid[r][c] &&
+    grid[r][c].type === "road_straight_vertical";
+  const getIsHorizontalRoad = (r, c) =>
+    r >= 0 &&
+    r < rows &&
+    c >= 0 &&
+    c < cols &&
+    grid[r][c] &&
+    grid[r][c].type === "road_straight_horizontal";
+  const getIsIntersection = (r, c) =>
+    r >= 0 &&
+    r < rows &&
+    c >= 0 &&
+    c < cols &&
+    grid[r][c] &&
+    grid[r][c].type === "road_intersection";
+  const getIsAnyRoad = (r, c) =>
+    getIsVerticalRoad(r, c) || getIsHorizontalRoad(r, c) || getIsIntersection(r, c);
 
   const centerLines = [];
   for (let r = 0; r < rows; r++) {
@@ -319,23 +287,76 @@ const Grid = ({
       const cx = (c + 0.5) * cellWidth;
       const cy = (r + 0.5) * cellHeight;
 
-      if (getIsAnyRoad(r, c + 1)) {
-        centerLines.push({
-          x1: cx,
-          y1: cy,
-          x2: (c + 1.5) * cellWidth,
-          y2: cy,
-          key: `h-${r}-${c}`,
-        });
-      }
-      if (getIsAnyRoad(r + 1, c)) {
-        centerLines.push({
-          x1: cx,
-          y1: cy,
-          x2: cx,
-          y2: (r + 1.5) * cellHeight,
-          key: `v-${r}-${c}`,
-        });
+      // Only connect matching road types and intersections
+      if (
+        getIsIntersection(r, c)
+      ) {
+        if (getIsVerticalRoad(r - 1, c) || getIsIntersection(r - 1, c))
+          centerLines.push({
+            x1: cx,
+            y1: cy,
+            x2: cx,
+            y2: cy - cellHeight,
+            key: `i-vu-${r}-${c}`,
+          });
+        if (getIsVerticalRoad(r + 1, c) || getIsIntersection(r + 1, c))
+          centerLines.push({
+            x1: cx,
+            y1: cy,
+            x2: cx,
+            y2: cy + cellHeight,
+            key: `i-vd-${r}-${c}`,
+          });
+        if (getIsHorizontalRoad(r, c - 1) || getIsIntersection(r, c - 1))
+          centerLines.push({
+            x1: cx,
+            y1: cy,
+            x2: cx - cellWidth,
+            y2: cy,
+            key: `i-hl-${r}-${c}`,
+          });
+        if (getIsHorizontalRoad(r, c + 1) || getIsIntersection(r, c + 1))
+          centerLines.push({
+            x1: cx,
+            y1: cy,
+            x2: cx + cellWidth,
+            y2: cy,
+            key: `i-hr-${r}-${c}`,
+          });
+      } else if (getIsVerticalRoad(r, c)) {
+        if (getIsVerticalRoad(r - 1, c) || getIsIntersection(r - 1, c))
+          centerLines.push({
+            x1: cx,
+            y1: cy,
+            x2: cx,
+            y2: cy - cellHeight,
+            key: `v-up-${r}-${c}`,
+          });
+        if (getIsVerticalRoad(r + 1, c) || getIsIntersection(r + 1, c))
+          centerLines.push({
+            x1: cx,
+            y1: cy,
+            x2: cx,
+            y2: cy + cellHeight,
+            key: `v-down-${r}-${c}`,
+          });
+      } else if (getIsHorizontalRoad(r, c)) {
+        if (getIsHorizontalRoad(r, c - 1) || getIsIntersection(r, c - 1))
+          centerLines.push({
+            x1: cx,
+            y1: cy,
+            x2: cx - cellWidth,
+            y2: cy,
+            key: `h-left-${r}-${c}`,
+          });
+        if (getIsHorizontalRoad(r, c + 1) || getIsIntersection(r, c + 1))
+          centerLines.push({
+            x1: cx,
+            y1: cy,
+            x2: cx + cellWidth,
+            y2: cy,
+            key: `h-right-${r}-${c}`,
+          });
       }
     }
   }
@@ -355,63 +376,29 @@ const Grid = ({
       {grid.flatMap((row, rowIndex) =>
         row.map((cellData, colIndex) => {
           const cellType = cellData?.type || null;
-          let neighborInfo = null;
+          let neighborInfo = { up: false, down: false, left: false, right: false };
 
           if (cellType === "road_intersection") {
             neighborInfo = {
-              up: getIsAnyRoad(rowIndex - 1, colIndex),
-              down: getIsAnyRoad(rowIndex + 1, colIndex),
-              left: getIsAnyRoad(rowIndex, colIndex - 1),
-              right: getIsAnyRoad(rowIndex, colIndex + 1),
+              up: getIsVerticalRoad(rowIndex - 1, colIndex) || getIsIntersection(rowIndex - 1, colIndex),
+              down: getIsVerticalRoad(rowIndex + 1, colIndex) || getIsIntersection(rowIndex + 1, colIndex),
+              left: getIsHorizontalRoad(rowIndex, colIndex - 1) || getIsIntersection(rowIndex, colIndex - 1),
+              right: getIsHorizontalRoad(rowIndex, colIndex + 1) || getIsIntersection(rowIndex, colIndex + 1),
             };
-          } else if (cellType === "road_straight") {
-            const n_up = getIsAnyRoad(rowIndex - 1, colIndex);
-            const n_down = getIsAnyRoad(rowIndex + 1, colIndex);
-            const n_left = getIsAnyRoad(rowIndex, colIndex - 1);
-            const n_right = getIsAnyRoad(rowIndex, colIndex + 1);
-
-            const hasStraightV =
-              getIsStraight(rowIndex - 1, colIndex) ||
-              getIsStraight(rowIndex + 1, colIndex);
-            const hasStraightH =
-              getIsStraight(rowIndex, colIndex - 1) ||
-              getIsStraight(rowIndex, colIndex + 1);
-
-            if (hasStraightV)
-              neighborInfo = {
-                up: n_up,
-                down: n_down,
-                left: false,
-                right: false,
-              };
-            else if (hasStraightH)
-              neighborInfo = {
-                up: false,
-                down: false,
-                left: n_left,
-                right: n_right,
-              };
-            else if (n_up || n_down)
-              neighborInfo = {
-                up: n_up,
-                down: n_down,
-                left: false,
-                right: false,
-              };
-            else if (n_left || n_right)
-              neighborInfo = {
-                up: false,
-                down: false,
-                left: n_left,
-                right: n_right,
-              };
-            else
-              neighborInfo = {
-                up: false,
-                down: false,
-                left: false,
-                right: false,
-              };
+          } else if (cellType === "road_straight_vertical") {
+            neighborInfo = {
+              up: getIsVerticalRoad(rowIndex - 1, colIndex) || getIsIntersection(rowIndex - 1, colIndex),
+              down: getIsVerticalRoad(rowIndex + 1, colIndex) || getIsIntersection(rowIndex + 1, colIndex),
+              left: false,
+              right: false,
+            };
+          } else if (cellType === "road_straight_horizontal") {
+            neighborInfo = {
+              up: false,
+              down: false,
+              left: getIsHorizontalRoad(rowIndex, colIndex - 1) || getIsIntersection(rowIndex, colIndex - 1),
+              right: getIsHorizontalRoad(rowIndex, colIndex + 1) || getIsIntersection(rowIndex, colIndex + 1),
+            };
           }
 
           return (
@@ -468,7 +455,6 @@ const PaletteItem = ({ item, isSelected, onClick }) => {
   );
 };
 
-// --- Main App Component ---
 export default function App() {
   const [rows, setRows] = useState(16);
   const [cols, setCols] = useState(25);
@@ -489,7 +475,6 @@ export default function App() {
 
   useEffect(() => {
     if (!isPlaying) return;
-
     const interval = setInterval(() => {
       setHistory((prev) => {
         const current = prev[step];
@@ -520,8 +505,11 @@ export default function App() {
                 // Stop!
               } else if (
                 targetCell &&
-                (targetCell.type === "road_straight" ||
-                  targetCell.type === "road_intersection") &&
+                (
+                  targetCell.type === "road_straight_vertical" ||
+                  targetCell.type === "road_straight_horizontal" ||
+                  targetCell.type === "road_intersection"
+                ) &&
                 !targetCell.hasCar
               ) {
                 canMove = true;
@@ -531,8 +519,11 @@ export default function App() {
                   const t = getCell(current, r + dr, c + dc);
                   if (
                     t &&
-                    (t.type === "road_straight" ||
-                      t.type === "road_intersection") &&
+                    (
+                      t.type === "road_straight_vertical" ||
+                      t.type === "road_straight_horizontal" ||
+                      t.type === "road_intersection"
+                    ) &&
                     !t.hasCar
                   ) {
                     possibleTurns.push(dir);
@@ -567,7 +558,7 @@ export default function App() {
                 }
                 if (!newGrid[nextR] || !newGrid[nextR][nextC]) {
                   newGrid[nextR][nextC] = {
-                    type: "road_straight",
+                    type: "road_intersection",
                     hasCar: nextDir,
                   };
                 } else {
