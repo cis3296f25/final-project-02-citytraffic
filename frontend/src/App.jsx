@@ -1,16 +1,14 @@
 import React, { useState, useEffect, useCallback } from "react";
 
 // --- Constants ---
-const TOTAL_GRID_WIDTH_PX = 19 * 64; // 1216px
-const TOTAL_GRID_HEIGHT_PX = 12 * 64; // 768px
-
-// The desired ratio: cols / rows = 1.5625 (or 25 / 16)
+const TOTAL_GRID_WIDTH_PX = 19 * 64;
+const TOTAL_GRID_HEIGHT_PX = 12 * 64;
 const RATIO = 1.5625;
 
-// --- NEW: Main palette ---
+// --- Palettes ---
 const MAIN_PALETTE_ITEMS = [
   { type: "select", label: "Select", emoji: "👆" },
-  { type: "road_menu", label: "Road", emoji: "🛣️" }, // --- MODIFIED: type is "road_menu"
+  { type: "road_menu", label: "Road", emoji: "🛣️" },
   { type: "car", label: "Car", emoji: "🚗" },
   { type: "building", label: "Building", emoji: "🏢" },
   { type: "tree", label: "Tree", emoji: "🌳" },
@@ -18,7 +16,6 @@ const MAIN_PALETTE_ITEMS = [
   { type: "eraser", label: "Eraser", emoji: "🧼" },
 ];
 
-// --- NEW: Road sub-palette ---
 const ROAD_PALETTE_ITEMS = [
   { type: "road_straight", label: "Straight", emoji: "➖" },
   { type: "road_intersection", label: "Intersection", emoji: "➕" },
@@ -30,170 +27,199 @@ const createEmptyGrid = (rows, cols) =>
   Array.from({ length: rows }, () => Array(cols).fill(null));
 
 /**
- * Renders the content for a specific grid cell.
+ * Renders the SVG Car with rotation based on direction
  */
-const renderCellContent = (cellType, neighborInfo) => {
-  // ---
-  // 1. Handle all non-road items (render emoji)
-  // ---
-  // --- MODIFIED: Check for both road types ---
-  if (cellType !== "road_intersection" && cellType !== "road_straight") {
-    // --- MODIFIED: Search both palettes for the emoji ---
-    const item =
-      MAIN_PALETTE_ITEMS.find((p) => p.type === cellType) ||
-      ROAD_PALETTE_ITEMS.find((p) => p.type === cellType);
-    if (!item) return null;
-    return (
-      <span className="text-3xl" role="img" aria-label={item.label}>
-        {item.emoji}
-      </span>
-    );
-  }
+const renderCar = (direction) => {
+  let rotation = 0;
+  if (direction === "right") rotation = 90;
+  if (direction === "down") rotation = 180;
+  if (direction === "left") rotation = 270;
 
-  // ---
-  // 2. Handle 'road' items (render SVG)
-  // ---
-  const hasRoad = neighborInfo;
-  const strokeColor = "#4A5568"; // gray-700
-  const strokeWidth = 80;
-  const center = 50;
-  const paths = [];
-
-  // For readability
-  const isUp = hasRoad.up;
-  const isDown = hasRoad.down;
-  const isLeft = hasRoad.left;
-  const isRight = hasRoad.right;
-  const neighborCount = isUp + isDown + isLeft + isRight;
-
-  // --- NEW LOGIC FOR CURVES ---
-  // (This logic will now only apply to "road_intersection"
-  // because "road_straight" neighborInfo will never have a turn)
-
-  // Case 1: 90-degree turns (and only 2 connections)
-  if (neighborCount === 2) {
-    if (isUp && isRight) {
-      paths.push(
-        <polyline
-          key="ur"
-          points="101,50 50,50 50,-1"
-          stroke={strokeColor}
-          strokeWidth={strokeWidth}
-          strokeLinejoin="round"
-          strokeLinecap="round"
-          fill="none"
-        />
-      );
-    } else if (isUp && isLeft) {
-      paths.push(
-        <polyline
-          key="ul"
-          points="-1,50 50,50 50,-1"
-          stroke={strokeColor}
-          strokeWidth={strokeWidth}
-          strokeLinejoin="round"
-          strokeLinecap="round"
-          fill="none"
-        />
-      );
-    } else if (isDown && isRight) {
-      paths.push(
-        <polyline
-          key="dr"
-          points="101,50 50,50 50,101"
-          stroke={strokeColor}
-          strokeWidth={strokeWidth}
-          strokeLinejoin="round"
-          strokeLinecap="round"
-          fill="none"
-        />
-      );
-    } else if (isDown && isLeft) {
-      paths.push(
-        <polyline
-          key="dl"
-          points="-1,50 50,50 50,101"
-          stroke={strokeColor}
-          strokeWidth={strokeWidth}
-          strokeLinejoin="round"
-          strokeLinecap="round"
-          fill="none"
-        />
-      );
-    }
-  }
-
-  // Case 2: Straights, T's, 4-ways, dead-ends
-  // (This logic runs if a turn was not already added)
-  if (paths.length === 0) {
-    if (isUp) {
-      paths.push(
-        <line
-          key="up"
-          x1={center}
-          y1={center}
-          x2={center}
-          y2={-1}
-          stroke={strokeColor}
-          strokeWidth={strokeWidth}
-          strokeLinecap="round"
-        />
-      );
-    }
-    if (isDown) {
-      paths.push(
-        <line
-          key="down"
-          x1={center}
-          y1={center}
-          x2={center}
-          y2={101}
-          stroke={strokeColor}
-          strokeWidth={strokeWidth}
-          strokeLinecap="round"
-        />
-      );
-    }
-    if (isLeft) {
-      paths.push(
-        <line
-          key="left"
-          x1={center}
-          y1={center}
-          x2={-1}
-          y2={center}
-          stroke={strokeColor}
-          strokeWidth={strokeWidth}
-          strokeLinecap="round"
-        />
-      );
-    }
-    if (isRight) {
-      paths.push(
-        <line
-          key="right"
-          x1={center}
-          y1={center}
-          x2={101}
-          y2={center}
-          stroke={strokeColor}
-          strokeWidth={strokeWidth}
-          strokeLinecap="round"
-        />
-      );
-    }
-  }
-
-  // Case 3: No connections (dot)
-  if (neighborCount === 0) {
-    paths.push(
-      <circle
-        key="dot"
-        cx={center}
-        cy={center}
-        r={strokeWidth / 2}
-        fill={strokeColor}
+  return (
+    <g transform={`translate(50, 50) rotate(${rotation}) translate(-25, -30)`}>
+      <rect x="2" y="4" width="50" height="60" rx="8" fill="rgba(0,0,0,0.2)" />
+      <rect x="-4" y="8" width="8" height="12" rx="2" fill="#333" />
+      <rect x="46" y="8" width="8" height="12" rx="2" fill="#333" />
+      <rect x="-4" y="40" width="8" height="12" rx="2" fill="#333" />
+      <rect x="46" y="40" width="8" height="12" rx="2" fill="#333" />
+      <rect
+        x="0"
+        y="0"
+        width="50"
+        height="60"
+        rx="8"
+        fill="#EF4444"
+        stroke="#991B1B"
+        strokeWidth="2"
       />
+      <rect x="5" y="8" width="40" height="10" rx="2" fill="#93C5FD" />
+      <rect x="5" y="42" width="40" height="8" rx="2" fill="#93C5FD" />
+      <rect
+        x="6"
+        y="20"
+        width="38"
+        height="20"
+        rx="1"
+        fill="#F87171"
+        opacity="0.5"
+      />
+    </g>
+  );
+};
+
+const renderCellContent = (cellData, neighborInfo) => {
+  const cellType = cellData?.type;
+  const carDirection = cellData?.hasCar;
+  const content = [];
+
+  if (cellType) {
+    const isRoad =
+      cellType === "road_intersection" || cellType === "road_straight";
+    if (!isRoad) {
+      const item =
+        MAIN_PALETTE_ITEMS.find((p) => p.type === cellType) ||
+        ROAD_PALETTE_ITEMS.find((p) => p.type === cellType);
+
+      if (item) {
+        content.push(
+          <foreignObject key="base" x="0" y="0" width="100" height="100">
+            <div className="w-full h-full flex items-center justify-center text-3xl">
+              {item.emoji}
+            </div>
+          </foreignObject>
+        );
+      }
+    } else {
+      const strokeColor = "#4A5568";
+      const strokeWidth = 80;
+      const center = 50;
+      const { up, down, left, right } = neighborInfo;
+      const neighborCount = up + down + left + right;
+
+      if (cellType === "road_intersection" && neighborCount === 2) {
+        if (up && right) {
+          content.push(
+            <polyline
+              key="ur"
+              points="101,50 50,50 50,-1"
+              stroke={strokeColor}
+              strokeWidth={strokeWidth}
+              strokeLinejoin="round"
+              strokeLinecap="round"
+              fill="none"
+            />
+          );
+        } else if (up && left) {
+          content.push(
+            <polyline
+              key="ul"
+              points="-1,50 50,50 50,-1"
+              stroke={strokeColor}
+              strokeWidth={strokeWidth}
+              strokeLinejoin="round"
+              strokeLinecap="round"
+              fill="none"
+            />
+          );
+        } else if (down && right) {
+          content.push(
+            <polyline
+              key="dr"
+              points="101,50 50,50 50,101"
+              stroke={strokeColor}
+              strokeWidth={strokeWidth}
+              strokeLinejoin="round"
+              strokeLinecap="round"
+              fill="none"
+            />
+          );
+        } else if (down && left) {
+          content.push(
+            <polyline
+              key="dl"
+              points="-1,50 50,50 50,101"
+              stroke={strokeColor}
+              strokeWidth={strokeWidth}
+              strokeLinejoin="round"
+              strokeLinecap="round"
+              fill="none"
+            />
+          );
+        }
+      }
+
+      if (content.length === 0) {
+        if (up)
+          content.push(
+            <line
+              key="up"
+              x1={center}
+              y1={center}
+              x2={center}
+              y2={-1}
+              stroke={strokeColor}
+              strokeWidth={strokeWidth}
+              strokeLinecap="round"
+            />
+          );
+        if (down)
+          content.push(
+            <line
+              key="down"
+              x1={center}
+              y1={center}
+              x2={center}
+              y2={101}
+              stroke={strokeColor}
+              strokeWidth={strokeWidth}
+              strokeLinecap="round"
+            />
+          );
+        if (left)
+          content.push(
+            <line
+              key="left"
+              x1={center}
+              y1={center}
+              x2={-1}
+              y2={center}
+              stroke={strokeColor}
+              strokeWidth={strokeWidth}
+              strokeLinecap="round"
+            />
+          );
+        if (right)
+          content.push(
+            <line
+              key="right"
+              x1={center}
+              y1={center}
+              x2={101}
+              y2={center}
+              stroke={strokeColor}
+              strokeWidth={strokeWidth}
+              strokeLinecap="round"
+            />
+          );
+      }
+
+      if (neighborCount === 0 && content.length === 0) {
+        content.push(
+          <circle
+            key="dot"
+            cx={center}
+            cy={center}
+            r={strokeWidth / 2}
+            fill={strokeColor}
+          />
+        );
+      }
+    }
+  }
+
+  if (carDirection) {
+    content.push(
+      <React.Fragment key="car">{renderCar(carDirection)}</React.Fragment>
     );
   }
 
@@ -203,7 +229,7 @@ const renderCellContent = (cellType, neighborInfo) => {
       viewBox="0 0 100 100"
       xmlns="http://www.w3.org/2000/svg"
     >
-      {paths}
+      {content}
     </svg>
   );
 };
@@ -211,7 +237,7 @@ const renderCellContent = (cellType, neighborInfo) => {
 // --- Grid Cell Component ---
 const GridCell = React.memo(
   ({
-    cellType,
+    cellData,
     row,
     col,
     onDrop,
@@ -221,44 +247,30 @@ const GridCell = React.memo(
     cellHeight,
     neighborInfo,
   }) => {
-    const handleDragOver = (e) => {
-      e.preventDefault(); // Allows dropping
-    };
-
+    const handleDragOver = (e) => e.preventDefault();
     const handleDrop = (e) => {
       e.preventDefault();
-      const droppedType = e.dataTransfer.getData("itemType");
-      onDrop(row, col, droppedType);
+      onDrop(row, col, e.dataTransfer.getData("itemType"));
     };
-
     const handleMouseEnter = (e) => {
-      if (e.buttons === 1) {
-        onPaint(row, col);
-      }
+      if (e.buttons === 1) onPaint(row, col);
     };
-
     const handleMouseDown = (e) => {
-      if (e.button === 0) {
-        onPaint(row, col);
-      }
+      if (e.button === 0) onPaint(row, col);
     };
-
     const handleContextMenu = (e) => {
       e.preventDefault();
       onRightClick(row, col);
     };
-
-    const cellStyle = {
-      position: "absolute",
-      left: `${col * cellWidth}px`,
-      top: `${row * cellHeight}px`,
-      width: `${cellWidth}px`,
-      height: `${cellHeight}px`,
-    };
-
     return (
       <div
-        style={cellStyle}
+        style={{
+          position: "absolute",
+          left: `${col * cellWidth}px`,
+          top: `${row * cellHeight}px`,
+          width: `${cellWidth}px`,
+          height: `${cellHeight}px`,
+        }}
         onDragOver={handleDragOver}
         onDrop={handleDrop}
         onMouseDown={handleMouseDown}
@@ -266,7 +278,7 @@ const GridCell = React.memo(
         onContextMenu={handleContextMenu}
         className="bg-transparent flex items-center justify-center cursor-pointer hover:bg-gray-100 transition-colors"
       >
-        {cellType && renderCellContent(cellType, neighborInfo)}
+        {renderCellContent(cellData, neighborInfo)}
       </div>
     );
   }
@@ -279,65 +291,52 @@ const Grid = ({
   cols,
   onDrop,
   onPaint,
-  isMouseDown,
   setIsMouseDown,
   onRightClick,
 }) => {
   const cellWidth = TOTAL_GRID_WIDTH_PX / cols;
   const cellHeight = TOTAL_GRID_HEIGHT_PX / rows;
 
-  // --- NEW: Helper functions to check for specific road types ---
-  const getIsIntersection = (r, c) => {
-    if (r < 0 || r >= rows || c < 0 || c >= cols) return false;
-    return grid[r][c] === "road_intersection";
-  };
-  const getIsStraight = (r, c) => {
-    if (r < 0 || r >= rows || c < 0 || c >= cols) return false;
-    return grid[r][c] === "road_straight";
-  };
   const getIsAnyRoad = (r, c) => {
     if (r < 0 || r >= rows || c < 0 || c >= cols) return false;
-    return grid[r][c] === "road_intersection" || grid[r][c] === "road_straight";
+    const cell = grid[r][c];
+    return (
+      cell &&
+      (cell.type === "road_intersection" || cell.type === "road_straight")
+    );
   };
-  // --- END NEW ---
 
-  // --- NEW: Logic to find centerlines between cells ---
+  const getIsStraight = (r, c) => {
+    if (r < 0 || r >= rows || c < 0 || c >= cols) return false;
+    const cell = grid[r][c];
+    return cell && cell.type === "road_straight";
+  };
+
   const centerLines = [];
-  const centerLineColor = "#FDE047"; // yellow-300
-  const centerLineWidth = 4;
-  const centerLineDash = "20 15";
-
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
-      // --- MODIFIED: Check for any road type ---
       if (!getIsAnyRoad(r, c)) continue;
+      const cx = (c + 0.5) * cellWidth;
+      const cy = (r + 0.5) * cellHeight;
 
-      const cx = (c + 0.5) * cellWidth; // Center x of current cell
-      const cy = (r + 0.5) * cellHeight; // Center y of current cell
-
-      // Check RIGHT neighbor (for a HORIZONTAL line)
-      // --- MODIFIED: Use getIsAnyRoad ---
       if (getIsAnyRoad(r, c + 1)) {
         centerLines.push({
           x1: cx,
           y1: cy,
-          x2: (c + 1.5) * cellWidth, // Center x of RIGHT cell
+          x2: (c + 1.5) * cellWidth,
           y2: cy,
-          key: `h-${r}-${c}-right`,
+          key: `h-${r}-${c}`,
         });
       }
-      // Check BOTTOM neighbor (for a VERTICAL line)
-      // --- MODIFIED: Use getIsAnyRoad ---
       if (getIsAnyRoad(r + 1, c)) {
         centerLines.push({
           x1: cx,
           y1: cy,
           x2: cx,
-          y2: (r + 1.5) * cellHeight, // Center y of BOTTOM cell
-          key: `v-${r}-${c}-down`,
+          y2: (r + 1.5) * cellHeight,
+          key: `v-${r}-${c}`,
         });
       }
-      // By only checking right and down, we avoid drawing duplicate lines
     }
   }
 
@@ -346,22 +345,19 @@ const Grid = ({
       onMouseDown={() => setIsMouseDown(true)}
       onMouseUp={() => setIsMouseDown(false)}
       onMouseLeave={() => setIsMouseDown(false)}
-      className="relative bg-white"
+      className="relative bg-white shadow-sm"
       style={{
         userSelect: "none",
         width: `${TOTAL_GRID_WIDTH_PX}px`,
         height: `${TOTAL_GRID_HEIGHT_PX}px`,
       }}
     >
-      {/* 1. Render all the GridCells (with gray road bases) */}
       {grid.flatMap((row, rowIndex) =>
-        row.map((cell, colIndex) => {
-          const cellType = cell;
+        row.map((cellData, colIndex) => {
+          const cellType = cellData?.type || null;
           let neighborInfo = null;
 
-          // --- MODIFIED: New neighbor logic for different road types ---
           if (cellType === "road_intersection") {
-            // Intersection roads connect to ANY adjacent road
             neighborInfo = {
               up: getIsAnyRoad(rowIndex - 1, colIndex),
               down: getIsAnyRoad(rowIndex + 1, colIndex),
@@ -369,72 +365,59 @@ const Grid = ({
               right: getIsAnyRoad(rowIndex, colIndex + 1),
             };
           } else if (cellType === "road_straight") {
-            // Straight roads are more complex.
-            // First, check if we are part of an existing straight line.
-            const hasStraightH =
-              getIsStraight(rowIndex, colIndex - 1) ||
-              getIsStraight(rowIndex, colIndex + 1);
+            const n_up = getIsAnyRoad(rowIndex - 1, colIndex);
+            const n_down = getIsAnyRoad(rowIndex + 1, colIndex);
+            const n_left = getIsAnyRoad(rowIndex, colIndex - 1);
+            const n_right = getIsAnyRoad(rowIndex, colIndex + 1);
+
             const hasStraightV =
               getIsStraight(rowIndex - 1, colIndex) ||
               getIsStraight(rowIndex + 1, colIndex);
+            const hasStraightH =
+              getIsStraight(rowIndex, colIndex - 1) ||
+              getIsStraight(rowIndex, colIndex + 1);
 
-            if (hasStraightV) {
-              // This cell is part of a VERTICAL straight road.
-              // Only connect up/down (to ANY road).
+            if (hasStraightV)
               neighborInfo = {
-                up: getIsAnyRoad(rowIndex - 1, colIndex),
-                down: getIsAnyRoad(rowIndex + 1, colIndex),
+                up: n_up,
+                down: n_down,
                 left: false,
                 right: false,
               };
-            } else if (hasStraightH) {
-              // This cell is part of a HORIZONTAL straight road.
-              // Only connect left/right (to ANY road).
+            else if (hasStraightH)
               neighborInfo = {
                 up: false,
                 down: false,
-                left: getIsAnyRoad(rowIndex, colIndex - 1),
-                right: getIsAnyRoad(rowIndex, colIndex + 1),
+                left: n_left,
+                right: n_right,
               };
-            } else {
-              // This is an "orphan" straight road cell (or only next to intersections).
-              // We'll default to a vertical line if possible, then horizontal, then a dot.
-              const n_up = getIsAnyRoad(rowIndex - 1, colIndex);
-              const n_down = getIsAnyRoad(rowIndex + 1, colIndex);
-              const n_left = getIsAnyRoad(rowIndex, colIndex - 1);
-              const n_right = getIsAnyRoad(rowIndex, colIndex + 1);
-
-              if (n_up || n_down) {
-                neighborInfo = {
-                  up: n_up,
-                  down: n_down,
-                  left: false,
-                  right: false,
-                };
-              } else if (n_left || n_right) {
-                neighborInfo = {
-                  up: false,
-                  down: false,
-                  left: n_left,
-                  right: n_right,
-                };
-              } else {
-                // It's a dot
-                neighborInfo = {
-                  up: false,
-                  down: false,
-                  left: false,
-                  right: false,
-                };
-              }
-            }
+            else if (n_up || n_down)
+              neighborInfo = {
+                up: n_up,
+                down: n_down,
+                left: false,
+                right: false,
+              };
+            else if (n_left || n_right)
+              neighborInfo = {
+                up: false,
+                down: false,
+                left: n_left,
+                right: n_right,
+              };
+            else
+              neighborInfo = {
+                up: false,
+                down: false,
+                left: false,
+                right: false,
+              };
           }
-          // --- END MODIFIED ---
 
           return (
             <GridCell
               key={`${rowIndex}-${colIndex}`}
-              cellType={cellType}
+              cellData={cellData}
               neighborInfo={neighborInfo}
               row={rowIndex}
               col={colIndex}
@@ -447,25 +430,17 @@ const Grid = ({
           );
         })
       )}
-
-      {/* 2. Render the centerline overlay */}
       <svg
         width={TOTAL_GRID_WIDTH_PX}
         height={TOTAL_GRID_HEIGHT_PX}
-        style={{
-          position: "absolute",
-          top: 0,
-          left: 0,
-          pointerEvents: "none", // Allows clicks to pass through
-        }}
-        xmlns="http://www.w3.org/2000/svg"
+        style={{ position: "absolute", top: 0, left: 0, pointerEvents: "none" }}
       >
         {centerLines.map((line) => (
           <line
             {...line}
-            stroke={centerLineColor}
-            strokeWidth={centerLineWidth}
-            strokeDasharray={centerLineDash}
+            stroke="#FDE047"
+            strokeWidth="4"
+            strokeDasharray="20 15"
             strokeLinecap="round"
           />
         ))}
@@ -474,12 +449,8 @@ const Grid = ({
   );
 };
 
-// --- Palette Item Component ---
 const PaletteItem = ({ item, isSelected, onClick }) => {
-  const handleDragStart = (e) => {
-    e.dataTransfer.setData("itemType", item.type);
-  };
-
+  const handleDragStart = (e) => e.dataTransfer.setData("itemType", item.type);
   return (
     <div
       draggable
@@ -491,89 +462,8 @@ const PaletteItem = ({ item, isSelected, onClick }) => {
           : "border-gray-300 bg-white hover:border-blue-300"
       }`}
     >
-      <span className="text-3xl" role="img" aria-label={item.label}>
-        {item.emoji}
-      </span>
+      <span className="text-3xl">{item.emoji}</span>
       <span className="text-xs text-gray-600 mt-1">{item.label}</span>
-    </div>
-  );
-};
-
-const LoginScreen = ({ onLogin }) => {
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
-
-  const handleLogin = (e) => {
-    e.preventDefault();
-    onLogin(username, password);
-  };
-
-  return (
-    <div
-      style={{
-        height: "100vh",
-        display: "flex",
-        justifyContent: "center",
-        alignItems: "center",
-        backgroundColor: "#1a1a1a",
-      }}
-    >
-      <div
-        style={{
-          backgroundColor: "#2b2b2b",
-          padding: "2rem",
-          borderRadius: "12px",
-          boxShadow: "0 0 10px rgba(0,0,0,0.3)",
-          width: "300px",
-          textAlign: "center",
-        }}
-      >
-        <h2 style={{ color: "white", marginBottom: "1rem" }}>Login</h2>
-        <input
-          type="text"
-          placeholder="Username"
-          value={username}
-          onChange={(e) => setUsername(e.target.value)}
-          style={{
-            width: "100%",
-            padding: "0.5rem",
-            marginBottom: "1rem",
-            borderRadius: "6px",
-            border: "none",
-          }}
-        />
-        <input
-          type="password"
-          placeholder="Password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          style={{
-            width: "100%",
-            padding: "0.5rem",
-            marginBottom: "1rem",
-            borderRadius: "6px",
-            border: "none",
-          }}
-        />
-        {error && (
-          <p style={{ color: "red", marginBottom: "0.5rem" }}>{error}</p>
-        )}
-        <button
-          onClick={handleLogin}
-          style={{
-            width: "100%",
-            padding: "0.5rem",
-            border: "none",
-            borderRadius: "6px",
-            backgroundColor: "#007bff",
-            color: "white",
-            cursor: "pointer",
-          }}
-        >
-          Login
-        </button>
-      </div>
     </div>
   );
 };
@@ -582,273 +472,292 @@ const LoginScreen = ({ onLogin }) => {
 export default function App() {
   const [rows, setRows] = useState(16);
   const [cols, setCols] = useState(25);
-
-  const [grid, setGrid] = useState(() => createEmptyGrid(rows, cols));
+  const [history, setHistory] = useState([createEmptyGrid(16, 25)]);
+  const [step, setStep] = useState(0);
+  const grid = history[step];
   const [selectedTool, setSelectedTool] = useState("select");
   const [isMouseDown, setIsMouseDown] = useState(false);
-
-  const [history, setHistory] = useState(() => [createEmptyGrid(rows, cols)]);
-  const [historyIndex, setHistoryIndex] = useState(0);
-
-  // --- NEW: State to manage which palette is shown ---
   const [paletteMode, setPaletteMode] = useState("main");
 
-  // States for Login Screen
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [prePlayStep, setPrePlayStep] = useState(null);
 
-  // Handle login
-  const handleLogin = (username, password) => {
-    if (!username.trim() || !password.trim()) {
-      alert("Please enter both a username and password.");
-      return;
-    }
-
-    // Example: you could add actual auth logic here later.
-    console.log("Logged in as:", username);
-    setIsLoggedIn(true);
-  };
-
-
-  // Wrap updateGrid in useCallback
-  const updateGrid = useCallback(
-    (row, col, value) => {
-      setGrid((prevGrid) => {
-        const newGrid = prevGrid.map((r) => [...r]);
-        if (newGrid[row] && newGrid[row][col] !== undefined) {
-          newGrid[row][col] = value;
-        }
-
-        const newHistory = history.slice(0, historyIndex + 1);
-        newHistory.push(newGrid);
-        setHistory(newHistory);
-        setHistoryIndex(newHistory.length - 1);
-
-        return newGrid;
-      });
-    },
-    [history, historyIndex]
-  );
-
-  // Wrap event handlers in useCallback
-  const handleDrop = useCallback(
-    (row, col, itemType) => {
-      // --- MODIFIED: Check for non-paintable types ---
-      if (itemType === "eraser") {
-        updateGrid(row, col, null);
-      } else if (
-        itemType &&
-        itemType !== "select" &&
-        itemType !== "back" &&
-        itemType !== "road_menu"
-      ) {
-        updateGrid(row, col, itemType);
-      }
-    },
-    [updateGrid]
-  );
-
-  const handlePaint = useCallback(
-    (row, col) => {
-      // --- MODIFIED: Check for non-paintable types ---
-      if (
-        !selectedTool ||
-        selectedTool === "select" ||
-        selectedTool === "back" ||
-        selectedTool === "road_menu"
-      ) {
-        return;
-      }
-
-      if (selectedTool === "eraser") {
-        updateGrid(row, col, null);
-      } else {
-        updateGrid(row, col, selectedTool);
-      }
-    },
-    [selectedTool, updateGrid]
-  );
-
-  const handleRightClick = useCallback(
-    (row, col) => {
-      updateGrid(row, col, null);
-    },
-    [updateGrid]
-  );
-
-  const handleClearGrid = () => {
-    const emptyGrid = createEmptyGrid(rows, cols);
-    setGrid(emptyGrid);
-
-    const newHistory = history.slice(0, historyIndex + 1);
-    newHistory.push(emptyGrid);
-    setHistory(newHistory);
-    setHistoryIndex(newHistory.length - 1);
-  };
-
-  const handleUndo = () => {
-    if (historyIndex > 0) {
-      setHistoryIndex(historyIndex - 1);
-      setGrid(history[historyIndex - 1]);
-    }
-  };
-
-  const handleRedo = () => {
-    if (historyIndex < history.length - 1) {
-      setHistoryIndex(historyIndex + 1);
-      setGrid(history[historyIndex + 1]);
-    }
+  const getCell = (g, r, c) => {
+    if (r < 0 || r >= g.length || c < 0 || c >= g[0].length) return null;
+    return g[r][c];
   };
 
   useEffect(() => {
-    const handleGlobalMouseUp = () => {
-      setIsMouseDown(false);
-    };
-    window.addEventListener("mouseup", handleGlobalMouseUp);
-    return () => window.removeEventListener("mouseup", handleGlobalMouseUp);
-  }, []);
+    if (!isPlaying) return;
 
-  // --- *** NEW HELPER FUNCTION TO RESET GRID ATOMICALLY *** ---
+    const interval = setInterval(() => {
+      setHistory((prev) => {
+        const current = prev[step];
+        const newGrid = current.map((row) =>
+          row.map((cell) => (cell ? { ...cell } : null))
+        );
+        const movedCars = new Set();
+
+        for (let r = 0; r < rows; r++) {
+          for (let c = 0; c < cols; c++) {
+            const cell = current[r][c];
+            if (cell && cell.hasCar && !movedCars.has(`${r},${c}`)) {
+              const direction = cell.hasCar;
+              let nextR = r;
+              let nextC = c;
+              let nextDir = direction;
+
+              if (direction === "up") nextR--;
+              if (direction === "down") nextR++;
+              if (direction === "left") nextC--;
+              if (direction === "right") nextC++;
+
+              const targetCell = getCell(current, nextR, nextC);
+
+              let canMove = false;
+
+              if (targetCell && targetCell.type === "traffic_light") {
+                // Stop!
+              } else if (
+                targetCell &&
+                (targetCell.type === "road_straight" ||
+                  targetCell.type === "road_intersection") &&
+                !targetCell.hasCar
+              ) {
+                canMove = true;
+              } else {
+                const possibleTurns = [];
+                const checkTurn = (dr, dc, dir) => {
+                  const t = getCell(current, r + dr, c + dc);
+                  if (
+                    t &&
+                    (t.type === "road_straight" ||
+                      t.type === "road_intersection") &&
+                    !t.hasCar
+                  ) {
+                    possibleTurns.push(dir);
+                  }
+                };
+                if (direction === "up" || direction === "down") {
+                  checkTurn(0, -1, "left");
+                  checkTurn(0, 1, "right");
+                } else {
+                  checkTurn(-1, 0, "up");
+                  checkTurn(1, 0, "down");
+                }
+                if (possibleTurns.length > 0) {
+                  nextDir =
+                    possibleTurns[
+                      Math.floor(Math.random() * possibleTurns.length)
+                    ];
+                  nextR = r;
+                  nextC = c;
+                  if (nextDir === "up") nextR--;
+                  if (nextDir === "down") nextR++;
+                  if (nextDir === "left") nextC--;
+                  if (nextDir === "right") nextC++;
+                  canMove = true;
+                }
+              }
+
+              if (canMove) {
+                if (newGrid[r][c]) {
+                  newGrid[r][c].hasCar = false;
+                  if (!newGrid[r][c].type) newGrid[r][c] = null;
+                }
+                if (!newGrid[nextR] || !newGrid[nextR][nextC]) {
+                  newGrid[nextR][nextC] = {
+                    type: "road_straight",
+                    hasCar: nextDir,
+                  };
+                } else {
+                  newGrid[nextR][nextC].hasCar = nextDir;
+                }
+                movedCars.add(`${nextR},${nextC}`);
+              } else {
+                if (newGrid[r][c]) newGrid[r][c].hasCar = nextDir;
+              }
+            }
+          }
+        }
+        return [...prev.slice(0, step + 1), newGrid];
+      });
+      setStep((s) => s + 1);
+    }, 500);
+
+    return () => clearInterval(interval);
+  }, [isPlaying, step, rows, cols]);
+
+  const updateGrid = useCallback((row, col, newItemOrType) => {
+    setHistory((prev) => {
+      const current = prev[step];
+      const newGrid = current.map((r) => r.map((cell) => (cell ? { ...cell } : null)));
+      const currentCell = newGrid[row][col] || { type: null, hasCar: false };
+      let updatedCell = { ...currentCell };
+      if (newItemOrType === null || newItemOrType === "eraser") {
+        if (updatedCell.hasCar) {
+          updatedCell.hasCar = false;
+          if (!updatedCell.type) updatedCell = null;
+        } else {
+          updatedCell = null;
+        }
+      } else if (newItemOrType === "car") {
+        updatedCell.hasCar = "right";
+      } else {
+        updatedCell.type = newItemOrType;
+      }
+      newGrid[row][col] = updatedCell;
+      return [...prev.slice(0, step + 1), newGrid];
+    });
+    setStep((s) => s + 1);
+  }, [step]);
+
+  const handleDrop = useCallback(
+    (r, c, t) => {
+      if (t && t !== "select" && t !== "back" && t !== "road_menu")
+        updateGrid(r, c, t);
+    },
+    [updateGrid]
+  );
+  const handlePaint = useCallback(
+    (r, c) => {
+      if (
+        !selectedTool ||
+        ["select", "back", "road_menu"].includes(selectedTool)
+      )
+        return;
+      updateGrid(r, c, selectedTool);
+    },
+    [selectedTool, updateGrid]
+  );
+  const handleRightClick = useCallback(
+    (r, c) => updateGrid(r, c, "eraser"),
+    [updateGrid]
+  );
+
   const resetGridDimensions = (newRows, newCols) => {
-    if (isNaN(newRows) || isNaN(newCols) || newRows <= 0 || newCols <= 0) {
-      return; // Safety check
-    }
-
-    const newGrid = createEmptyGrid(newRows, newCols);
-
-    // Set all states at once
+    if (isNaN(newRows) || newRows <= 0) return;
     setRows(newRows);
     setCols(newCols);
-    setGrid(newGrid);
-    setHistory([newGrid]); // Reset history with the new grid
-    setHistoryIndex(0);
+    setHistory((prev) => [
+      ...prev.slice(0, step + 1),
+      createEmptyGrid(newRows, newCols),
+    ]);
+    setStep((s) => s + 1);
   };
 
-  // --- *** MODIFIED Handlers for dimension inputs *** ---
-  const handleRowsChange = (e) => {
-    const newRows = Math.max(1, parseInt(e.target.value, 10));
-    if (!isNaN(newRows)) {
-      const newCols = Math.round(newRows * RATIO);
-      resetGridDimensions(newRows, newCols); // <-- Use the helper
-    }
-  };
-
-  const handleColsChange = (e) => {
-    const newCols = Math.max(1, parseInt(e.target.value, 10));
-    if (!isNaN(newCols)) {
-      const newRows = Math.round(newCols / RATIO);
-      resetGridDimensions(newRows, newCols); // <-- Use the helper
-    }
-  };
-
-  // --- NEW: Handle clicks on palette items ---
-  const handlePaletteClick = (type) => {
-    if (type === "road_menu") {
-      setPaletteMode("road");
-      setSelectedTool("select"); // Deselect any active tool
-    } else if (type === "back") {
-      setPaletteMode("main");
-      setSelectedTool("select");
-    } else {
-      setSelectedTool(type);
-    }
-  };
-
-  // --- NEW: Determine which palette to show ---
-  const currentPaletteItems = paletteMode === "road" ? ROAD_PALETTE_ITEMS : MAIN_PALETTE_ITEMS;
+  const currentPaletteItems =
+    paletteMode === "road" ? ROAD_PALETTE_ITEMS : MAIN_PALETTE_ITEMS;
 
   return (
     <div className="flex h-screen bg-gradient-to-br from-blue-50 to-purple-50">
-      {/* Left Sidebar: Palette */}
       <div className="w-64 bg-white shadow-lg p-6 flex flex-col">
+        <h1 className="text-2xl font-bold text-gray-800 mb-6">City Builder</h1>
 
-        {isLoggedIn ? (
-          <>
-           <h1 className="text-2xl font-bold text-gray-800 mb-6">City Builder</h1>
+        <div className="mb-6 p-4 bg-gray-100 rounded-xl border border-gray-200">
+          <h3 className="text-sm font-bold text-gray-500 uppercase mb-2 tracking-wider">
+            Simulation
+          </h3>
+          <button
+            onClick={() => {
+              if (!isPlaying) setPrePlayStep(step);
+              setIsPlaying(!isPlaying);
+            }}
+            className={`w-full py-3 rounded-lg font-bold text-white shadow-sm transition-all transform active:scale-95 ${
+              isPlaying
+                ? "bg-orange-500 hover:bg-orange-600"
+                : "bg-green-500 hover:bg-green-600"
+            }`}
+          >
+            {isPlaying ? "⏸ Pause Traffic" : "▶ Start Traffic"}
+          </button>
+          <button
+            onClick={() => {
+              if (prePlayStep !== null) setStep(prePlayStep);
+            }}
+            className="w-full mt-2 py-3 rounded-lg font-bold text-white bg-blue-500 hover:bg-blue-600 shadow-sm transition-all active:scale-95"
+            disabled={prePlayStep === null}
+          >
+            🔄 Restart Traffic
+          </button>
+          <p className="text-xs text-gray-500 mt-2 text-center">
+            {isPlaying ? "Cars are moving..." : "Place cars then click Start"}
+          </p>
+        </div>
 
-          {/* Dimension Inputs */}
-          <h2 className="text-lg font-semibold text-gray-700 mb-2">Dimensions</h2>
-          <div className="flex gap-2 mb-4">
-            <div className="flex-1">
-              <label htmlFor="rows" className="text-sm font-medium text-gray-600">
-                Rows
-              </label>
-              <input
-                type="number"
-                id="rows"
-                value={rows}
-                onChange={handleRowsChange}
-                className="w-full p-2 border border-gray-300 rounded-lg"
-                min="1"
-              />
-            </div>
-            <div className="flex-1">
-              <label htmlFor="cols" className="text-sm font-medium text-gray-600">
-                Cols
-              </label>
-              <input
-                type="number"
-                id="cols"
-                value={cols}
-                onChange={handleColsChange}
-                className="w-full p-2 border border-gray-300 rounded-lg"
-                min="1"
-              />
-            </div>
+        <h2 className="text-lg font-semibold text-gray-700 mb-2">Dimensions</h2>
+        <div className="flex gap-2 mb-4">
+          <div className="flex-1">
+            <label className="text-xs">Rows</label>
+            <input
+              type="number"
+              value={rows}
+              onChange={(e) =>
+                resetGridDimensions(
+                  Math.max(1, parseInt(e.target.value)),
+                  Math.round(Math.max(1, parseInt(e.target.value)) * RATIO)
+                )
+              }
+              className="w-full p-1 border rounded"
+            />
+          </div>
+          <div className="flex-1">
+            <label className="text-xs">Cols</label>
+            <input
+              type="number"
+              value={cols}
+              onChange={(e) =>
+                resetGridDimensions(
+                  Math.round(Math.max(1, parseInt(e.target.value)) / RATIO),
+                  Math.max(1, parseInt(e.target.value))
+                )
+              }
+              className="w-full p-1 border rounded"
+            />
+          </div>
         </div>
 
         <h2 className="text-lg font-semibold text-gray-700 mb-2">Palette</h2>
         <div className="flex-grow grid grid-cols-2 gap-3">
-          {/* --- MODIFIED: Use currentPaletteItems and handlePaletteClick --- */}
           {currentPaletteItems.map((item) => (
             <PaletteItem
               key={item.type}
               item={item}
               isSelected={selectedTool === item.type}
-              onClick={() => handlePaletteClick(item.type)}
+              onClick={() => {
+                if (item.type === "road_menu") {
+                  setPaletteMode("road");
+                  setSelectedTool("select");
+                } else if (item.type === "back") {
+                  setPaletteMode("main");
+                  setSelectedTool("select");
+                } else setSelectedTool(item.type);
+              }}
             />
           ))}
         </div>
 
-        {/* Undo/Redo Buttons */}
-        <div className="flex gap-2 mb-3">
-          <button
-            onClick={handleUndo}
-            disabled={historyIndex <= 0}
-            className="flex-1 px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-opacity-75 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            ↶ Undo
-          </button>
-          <button
-            onClick={handleRedo}
-            disabled={historyIndex >= history.length - 1}
-            className="flex-1 px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-opacity-75 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            ↷ Redo
-          </button>
-        </div>
-
-        {/* Clear Button */}
         <button
-          onClick={handleClearGrid}
-          className="w-full px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-400 focus:ring-opacity-75 transition-colors"
+          onClick={() => {
+            setHistory((prev) => [
+              ...prev.slice(0, step + 1),
+              createEmptyGrid(rows, cols),
+            ]);
+            setStep((s) => s + 1);
+          }}
+          className="w-full mt-3 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600"
         >
           Clear Grid
-        </button> </>
-        ) :
-      (
-        <LoginScreen onLogin={handleLogin}/>
-      )}
+        </button>
       </div>
 
-      {/* Grid */}
-      <div className="flex-grow flex items-center justify-center p-4 md:p-8 overflow-auto">
+      <div className="flex-grow flex items-center justify-center p-4 overflow-auto bg-slate-200">
         <Grid
           grid={grid}
           rows={rows}
           cols={cols}
           onDrop={handleDrop}
           onPaint={handlePaint}
-          isMouseDown={isMouseDown}
           setIsMouseDown={setIsMouseDown}
           onRightClick={handleRightClick}
         />
