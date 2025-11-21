@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback, useRef } from "react";
 const TOTAL_GRID_WIDTH_PX = 19 * 64;
 const TOTAL_GRID_HEIGHT_PX = 12 * 64;
 const RATIO = 1.5625;
+const API_BASE_URL = 'http://localhost:8000/api';
 
 // --- Palettes ---
 const MAIN_PALETTE_ITEMS = [
@@ -491,6 +492,222 @@ const PaletteItem = ({ item, isSelected, onClick }) => {
   );
 };
 
+// --- Save/Load Panel Component ---
+const SaveLoadPanel = ({ grid, rows, cols, onLoadLayout }) => {
+  const [layouts, setLayouts] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [saveName, setSaveName] = useState('');
+  const [saveDescription, setSaveDescription] = useState('');
+  const [showSaveForm, setShowSaveForm] = useState(false);
+
+  // API functions integrated directly
+  const fetchLayouts = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await fetch(`${API_BASE_URL}/layouts/`);
+      if (!response.ok) throw new Error('Failed to fetch layouts');
+      const data = await response.json();
+      setLayouts(data.results || data);
+    } catch (err) {
+      setError(err.message);
+      console.error('Error fetching layouts:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const saveLayout = async (layoutData) => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/layouts/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(layoutData),
+      });
+      
+      if (!response.ok) throw new Error('Failed to save layout');
+      
+      const savedLayout = await response.json();
+      setLayouts(prev => [savedLayout, ...prev]);
+      return savedLayout;
+    } catch (err) {
+      setError(err.message);
+      throw err;
+    }
+  };
+
+  const deleteLayout = async (layoutId) => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/layouts/${layoutId}/`, {
+        method: 'DELETE',
+      });
+      
+      if (!response.ok) throw new Error('Failed to delete layout');
+      
+      setLayouts(prev => prev.filter(layout => layout.id !== layoutId));
+    } catch (err) {
+      setError(err.message);
+      throw err;
+    }
+  };
+
+  const handleSave = async () => {
+    if (!saveName.trim()) {
+      alert('Please enter a name for your layout');
+      return;
+    }
+
+    try {
+      await saveLayout({
+        name: saveName,
+        description: saveDescription,
+        rows,
+        cols,
+        grid_data: grid,
+      });
+      setSaveName('');
+      setSaveDescription('');
+      setShowSaveForm(false);
+      alert('Layout saved successfully!');
+    } catch (err) {
+      alert('Failed to save layout. Make sure the backend server is running.');
+    }
+  };
+
+  const handleLoad = (layout) => {
+    if (window.confirm(`Load layout "${layout.name}"? This will replace your current grid.`)) {
+      onLoadLayout(layout.grid_data, layout.rows, layout.cols);
+    }
+  };
+
+  const handleDelete = async (layout) => {
+    if (window.confirm(`Delete layout "${layout.name}"?`)) {
+      try {
+        await deleteLayout(layout.id);
+        alert('Layout deleted successfully!');
+      } catch (err) {
+        alert('Failed to delete layout');
+      }
+    }
+  };
+
+  const handleRefresh = () => {
+    fetchLayouts();
+  };
+
+  useEffect(() => {
+    fetchLayouts();
+  }, []);
+
+  return (
+    <div className="bg-white p-4 rounded-lg shadow-md mb-4">
+      <div className="flex justify-between items-center mb-3">
+        <h3 className="text-lg font-semibold">Save & Load</h3>
+        <button
+          onClick={handleRefresh}
+          className="text-sm bg-gray-200 hover:bg-gray-300 px-2 py-1 rounded"
+          title="Refresh layouts"
+        >
+          🔄
+        </button>
+      </div>
+      
+      {/* Save Form */}
+      {showSaveForm ? (
+        <div className="mb-4 p-3 bg-blue-50 rounded-lg">
+          <input
+            type="text"
+            placeholder="Layout Name *"
+            value={saveName}
+            onChange={(e) => setSaveName(e.target.value)}
+            className="w-full p-2 border rounded mb-2 text-sm"
+          />
+          <textarea
+            placeholder="Description (optional)"
+            value={saveDescription}
+            onChange={(e) => setSaveDescription(e.target.value)}
+            className="w-full p-2 border rounded mb-2 text-sm"
+            rows="2"
+          />
+          <div className="flex gap-2">
+            <button
+              onClick={handleSave}
+              className="flex-1 bg-green-500 text-white py-2 rounded hover:bg-green-600 text-sm"
+            >
+              Save
+            </button>
+            <button
+              onClick={() => setShowSaveForm(false)}
+              className="flex-1 bg-gray-500 text-white py-2 rounded hover:bg-gray-600 text-sm"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      ) : (
+        <button
+          onClick={() => setShowSaveForm(true)}
+          className="w-full bg-green-500 text-white py-2 rounded hover:bg-green-600 mb-4"
+        >
+          💾 Save Current Layout
+        </button>
+      )}
+
+      {/* Load List */}
+      <div>
+        <h4 className="font-medium mb-2">Saved Layouts</h4>
+        {loading && <p className="text-sm text-gray-600">Loading...</p>}
+        {error && (
+          <div className="text-red-500 text-sm mb-2 p-2 bg-red-50 rounded">
+            {error} - Make sure backend is running on port 8000
+          </div>
+        )}
+        <div className="space-y-2 max-h-48 overflow-y-auto">
+          {layouts.length === 0 && !loading && (
+            <p className="text-sm text-gray-500 text-center py-4">
+              No saved layouts yet
+            </p>
+          )}
+          {layouts.map((layout) => (
+            <div key={layout.id} className="flex justify-between items-center p-2 border rounded bg-gray-50">
+              <div className="flex-1 min-w-0">
+                <div className="font-medium text-sm truncate">{layout.name}</div>
+                <div className="text-xs text-gray-500">
+                  {layout.rows}x{layout.cols} • {new Date(layout.created_at).toLocaleDateString()}
+                </div>
+                {layout.description && (
+                  <div className="text-xs text-gray-600 truncate mt-1">
+                    {layout.description}
+                  </div>
+                )}
+              </div>
+              <div className="flex gap-1 ml-2">
+                <button
+                  onClick={() => handleLoad(layout)}
+                  className="bg-blue-500 text-white px-2 py-1 rounded text-xs hover:bg-blue-600"
+                  title="Load layout"
+                >
+                  📂
+                </button>
+                <button
+                  onClick={() => handleDelete(layout)}
+                  className="bg-red-500 text-white px-2 py-1 rounded text-xs hover:bg-red-600"
+                  title="Delete layout"
+                >
+                  🗑️
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // --- Main App Component ---
 export default function App() {
   const [rows, setRows] = useState(16);
@@ -499,8 +716,6 @@ export default function App() {
   const [selectedTool, setSelectedTool] = useState("select");
   const [isMouseDown, setIsMouseDown] = useState(false);
   const [paletteMode, setPaletteMode] = useState("main");
-
-  // --- NEW: Simulation State ---
   const [isPlaying, setIsPlaying] = useState(false);
 
   // Helper to get a cell safely
@@ -509,61 +724,47 @@ export default function App() {
     return g[r][c];
   };
 
-  // --- NEW: Simulation Tick Logic ---
+  // --- Simulation Tick Logic ---
   useEffect(() => {
     if (!isPlaying) return;
 
     const interval = setInterval(() => {
       setGrid((prevGrid) => {
-        // 1. Create a deep copy for the next frame
-        // We must map carefully to preserve object references where they don't change
         const newGrid = prevGrid.map((row) =>
           row.map((cell) => (cell ? { ...cell } : null))
         );
 
-        // Track which cars have already moved this tick to prevent double movement
         const movedCars = new Set();
 
         for (let r = 0; r < rows; r++) {
           for (let c = 0; c < cols; c++) {
             const cell = prevGrid[r][c];
 
-            // If cell has a car and we haven't moved it yet
             if (cell && cell.hasCar && !movedCars.has(`${r},${c}`)) {
               const direction = cell.hasCar;
               let nextR = r;
               let nextC = c;
               let nextDir = direction;
 
-              // Calculate target cell based on current direction
               if (direction === "up") nextR--;
               if (direction === "down") nextR++;
               if (direction === "left") nextC--;
               if (direction === "right") nextC++;
 
-              const targetCell = getCell(prevGrid, nextR, nextC); // Look at PREV grid state for collision logic
+              const targetCell = getCell(prevGrid, nextR, nextC);
 
-              // --- MOVEMENT LOGIC ---
               let canMove = false;
 
-              // 1. Check for Traffic Light
               if (targetCell && targetCell.type === "traffic_light") {
-                // Stop! (Don't set canMove to true)
-              }
-              // 2. Check if target is a drivable road and has NO car
-              else if (
+                // Stop at traffic light
+              } else if (
                 targetCell &&
                 (targetCell.type === "road_straight" ||
                   targetCell.type === "road_intersection") &&
-                !targetCell.hasCar // Simple collision avoidance
+                !targetCell.hasCar
               ) {
                 canMove = true;
-              }
-              // 3. Cornering / Hit a Wall
-              else {
-                // We are blocked (end of road, not a road, or boundary).
-                // Try to turn.
-                // Determine valid turns based on current direction
+              } else {
                 const possibleTurns = [];
                 const checkTurn = (dr, dc, dir) => {
                   const t = getCell(prevGrid, r + dr, c + dc);
@@ -586,14 +787,9 @@ export default function App() {
                 }
 
                 if (possibleTurns.length > 0) {
-                  // Pick random valid turn
-                  nextDir =
-                    possibleTurns[
-                      Math.floor(Math.random() * possibleTurns.length)
-                    ];
-                  // Update next coords
+                  nextDir = possibleTurns[Math.floor(Math.random() * possibleTurns.length)];
                   nextR = r;
-                  nextC = c; // Reset
+                  nextC = c;
                   if (nextDir === "up") nextR--;
                   if (nextDir === "down") nextR++;
                   if (nextDir === "left") nextC--;
@@ -602,19 +798,13 @@ export default function App() {
                 }
               }
 
-              // --- APPLY MOVE ---
               if (canMove) {
-                // Remove car from current cell in NEW grid
                 if (newGrid[r][c]) {
                   newGrid[r][c].hasCar = false;
-                  // If it was purely a car (no terrain), make it null (unlikely with new logic but safe)
                   if (!newGrid[r][c].type) newGrid[r][c] = null;
                 }
 
-                // Add car to new cell in NEW grid
-                // Ensure target exists in newGrid (it might be null if we painted on null)
                 if (!newGrid[nextR][nextC]) {
-                  // Should not happen if we only move on roads, but safety first
                   newGrid[nextR][nextC] = {
                     type: "road_straight",
                     hasCar: nextDir,
@@ -623,9 +813,8 @@ export default function App() {
                   newGrid[nextR][nextC].hasCar = nextDir;
                 }
 
-                movedCars.add(`${nextR},${nextC}`); // Mark as moved so we don't process it again this loop
+                movedCars.add(`${nextR},${nextC}`);
               } else {
-                // Car stays put. Update rotation if it changed (e.g. tried to turn but blocked)
                 if (newGrid[r][c]) newGrid[r][c].hasCar = nextDir;
               }
             }
@@ -633,7 +822,7 @@ export default function App() {
         }
         return newGrid;
       });
-    }, 500); // Tick speed
+    }, 500);
 
     return () => clearInterval(interval);
   }, [isPlaying, rows, cols]);
@@ -652,8 +841,6 @@ export default function App() {
           updatedCell = null;
         }
       } else if (newItemOrType === "car") {
-        // Default new cars to facing RIGHT, or infer from road?
-        // Let's default to "right". Logic will fix it on hit wall.
         updatedCell.hasCar = "right";
       } else {
         updatedCell.type = newItemOrType;
@@ -663,7 +850,6 @@ export default function App() {
     });
   }, []);
 
-  // Handlers (Drop, Paint, etc)
   const handleDrop = useCallback(
     (r, c, t) => {
       if (t && t !== "select" && t !== "back" && t !== "road_menu")
@@ -671,6 +857,7 @@ export default function App() {
     },
     [updateGrid]
   );
+  
   const handlePaint = useCallback(
     (r, c) => {
       if (
@@ -682,6 +869,7 @@ export default function App() {
     },
     [selectedTool, updateGrid]
   );
+  
   const handleRightClick = useCallback(
     (r, c) => updateGrid(r, c, "eraser"),
     [updateGrid]
@@ -694,13 +882,29 @@ export default function App() {
     setGrid(createEmptyGrid(newRows, newCols));
   };
 
+  const handleLoadLayout = (loadedGrid, loadedRows, loadedCols) => {
+    setRows(loadedRows);
+    setCols(loadedCols);
+    setGrid(loadedGrid);
+    setIsPlaying(false); // Stop simulation when loading new layout
+  };
+
   const currentPaletteItems =
     paletteMode === "road" ? ROAD_PALETTE_ITEMS : MAIN_PALETTE_ITEMS;
 
   return (
     <div className="flex h-screen bg-gradient-to-br from-blue-50 to-purple-50">
-      <div className="w-64 bg-white shadow-lg p-6 flex flex-col">
-        <h1 className="text-2xl font-bold text-gray-800 mb-6">City Builder</h1>
+      <div className="w-80 bg-white shadow-lg p-6 flex flex-col overflow-y-auto">
+        <h1 className="text-2xl font-bold text-gray-800 mb-2">City Builder Pro</h1>
+        <p className="text-sm text-gray-600 mb-6">Build and simulate city traffic</p>
+
+        {/* Save/Load Panel */}
+        <SaveLoadPanel 
+          grid={grid}
+          rows={rows}
+          cols={cols}
+          onLoadLayout={handleLoadLayout}
+        />
 
         {/* Controls */}
         <div className="mb-6 p-4 bg-gray-100 rounded-xl border border-gray-200">
@@ -723,9 +927,9 @@ export default function App() {
         </div>
 
         <h2 className="text-lg font-semibold text-gray-700 mb-2">Dimensions</h2>
-        <div className="flex gap-2 mb-4">
+        <div className="flex gap-2 mb-6">
           <div className="flex-1">
-            <label className="text-xs">Rows</label>
+            <label className="text-xs block mb-1">Rows</label>
             <input
               type="number"
               value={rows}
@@ -735,11 +939,11 @@ export default function App() {
                   Math.round(Math.max(1, parseInt(e.target.value)) * RATIO)
                 )
               }
-              className="w-full p-1 border rounded"
+              className="w-full p-2 border rounded text-sm"
             />
           </div>
           <div className="flex-1">
-            <label className="text-xs">Cols</label>
+            <label className="text-xs block mb-1">Cols</label>
             <input
               type="number"
               value={cols}
@@ -749,13 +953,13 @@ export default function App() {
                   Math.max(1, parseInt(e.target.value))
                 )
               }
-              className="w-full p-1 border rounded"
+              className="w-full p-2 border rounded text-sm"
             />
           </div>
         </div>
 
-        <h2 className="text-lg font-semibold text-gray-700 mb-2">Palette</h2>
-        <div className="flex-grow grid grid-cols-2 gap-3">
+        <h2 className="text-lg font-semibold text-gray-700 mb-2">Tools</h2>
+        <div className="flex-grow grid grid-cols-2 gap-3 mb-6">
           {currentPaletteItems.map((item) => (
             <PaletteItem
               key={item.type}
@@ -776,9 +980,9 @@ export default function App() {
 
         <button
           onClick={() => setGrid(createEmptyGrid(rows, cols))}
-          className="w-full mt-3 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600"
+          className="w-full px-4 py-3 bg-red-500 text-white rounded-lg hover:bg-red-600 font-medium"
         >
-          Clear Grid
+          🗑️ Clear Grid
         </button>
       </div>
 
