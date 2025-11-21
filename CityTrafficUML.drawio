@@ -1,114 +1,113 @@
-<mxfile host="app.diagrams.net" agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36 OPR/123.0.0.0" version="29.0.2">
+<mxfile host="app.diagrams.net" agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36 OPR/123.0.0.0" version="29.1.0">
   <diagram name="Page-1" id="dbLV6_JRbnTTmWj4D_OY">
-    <mxGraphModel dx="2497" dy="1262" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
+    <mxGraphModel dx="1838" dy="757" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
       <root>
         <mxCell id="0" />
         <mxCell id="1" parent="0" />
-        <mxCell id="X4CWFleY7g2hzE789E_h-1" value="&lt;p style=&quot;margin:0px;margin-top:4px;text-align:center;&quot;&gt;&lt;b&gt;App&lt;/b&gt;&lt;/p&gt;&lt;hr size=&quot;1&quot; style=&quot;border-style:solid;&quot;&gt;&lt;p style=&quot;margin:0px;margin-left:4px;&quot;&gt;- rows: Integer&lt;br&gt;- cols: Integer&lt;br&gt;- grid: CellData[][]&amp;nbsp;&lt;/p&gt;&lt;p style=&quot;margin:0px;margin-left:4px;&quot;&gt;- selectedTool: String&lt;/p&gt;&lt;p style=&quot;margin:0px;margin-left:4px;&quot;&gt;- isMouseDown: Boolean&amp;nbsp;&lt;/p&gt;&lt;p style=&quot;margin:0px;margin-left:4px;&quot;&gt;- paletteMode: String&amp;nbsp;&lt;/p&gt;&lt;p style=&quot;margin:0px;margin-left:4px;&quot;&gt;- isPlaying: Boolean&lt;/p&gt;&lt;hr size=&quot;1&quot; style=&quot;border-style:solid;&quot;&gt;&lt;p style=&quot;margin:0px;margin-left:4px;&quot;&gt;- getCell(grid: CellData[][], r: Integer, c: Integer): CellData&amp;nbsp;&lt;/p&gt;&lt;p style=&quot;margin:0px;margin-left:4px;&quot;&gt;- updateGrid(row: Integer, col: Integer, newItemOrType: String): void&amp;nbsp;&lt;/p&gt;&lt;p style=&quot;margin:0px;margin-left:4px;&quot;&gt;- handleDrop(r: Integer, c: Integer, t: String): void&amp;nbsp;&lt;/p&gt;&lt;p style=&quot;margin:0px;margin-left:4px;&quot;&gt;- handlePaint(r: Integer, c: Integer): void&amp;nbsp;&lt;/p&gt;&lt;p style=&quot;margin:0px;margin-left:4px;&quot;&gt;- handleRightClick(r: Integer, c: Integer): void&amp;nbsp;&lt;/p&gt;&lt;p style=&quot;margin:0px;margin-left:4px;&quot;&gt;- resetGridDimensions(newRows: Integer, newCols: Integer): void&amp;nbsp;&lt;/p&gt;&lt;p style=&quot;margin:0px;margin-left:4px;&quot;&gt;- useEffect(simulationTick: Function): void&lt;/p&gt;" style="verticalAlign=top;align=left;overflow=fill;html=1;whiteSpace=wrap;" vertex="1" parent="1">
-          <mxGeometry x="-40" y="80" width="400" height="280" as="geometry" />
+        <mxCell id="X4CWFleY7g2hzE789E_h-1" parent="1" style="verticalAlign=top;align=left;overflow=fill;html=1;whiteSpace=wrap;" value="&lt;p style=&quot;margin:0px;margin-top:4px;text-align:center;&quot;&gt;&lt;b&gt;App&lt;/b&gt;&lt;/p&gt;&lt;hr size=&quot;1&quot; style=&quot;border-style:solid;&quot;&gt;&lt;p style=&quot;margin:0px;margin-left:4px;&quot;&gt;- rows: Integer&lt;br&gt;- cols: Integer&lt;br&gt;- grid: CellData[][]&amp;nbsp;&lt;/p&gt;&lt;p style=&quot;margin:0px;margin-left:4px;&quot;&gt;- selectedTool: String&lt;/p&gt;&lt;p style=&quot;margin:0px;margin-left:4px;&quot;&gt;- isMouseDown: Boolean&amp;nbsp;&lt;/p&gt;&lt;p style=&quot;margin:0px;margin-left:4px;&quot;&gt;- paletteMode: String&amp;nbsp;&lt;/p&gt;&lt;p style=&quot;margin:0px;margin-left:4px;&quot;&gt;- isPlaying: Boolean&lt;/p&gt;&lt;hr size=&quot;1&quot; style=&quot;border-style:solid;&quot;&gt;&lt;p style=&quot;margin:0px;margin-left:4px;&quot;&gt;- getCell(grid: CellData[][], r: Integer, c: Integer): CellData&amp;nbsp;&lt;/p&gt;&lt;p style=&quot;margin:0px;margin-left:4px;&quot;&gt;- updateGrid(row: Integer, col: Integer, newItemOrType: String): void&amp;nbsp;&lt;/p&gt;&lt;p style=&quot;margin:0px;margin-left:4px;&quot;&gt;- handleDrop(r: Integer, c: Integer, t: String): void&amp;nbsp;&lt;/p&gt;&lt;p style=&quot;margin:0px;margin-left:4px;&quot;&gt;- handlePaint(r: Integer, c: Integer): void&amp;nbsp;&lt;/p&gt;&lt;p style=&quot;margin:0px;margin-left:4px;&quot;&gt;- handleRightClick(r: Integer, c: Integer): void&amp;nbsp;&lt;/p&gt;&lt;p style=&quot;margin:0px;margin-left:4px;&quot;&gt;- resetGridDimensions(newRows: Integer, newCols: Integer): void&amp;nbsp;&lt;/p&gt;&lt;p style=&quot;margin:0px;margin-left:4px;&quot;&gt;- useEffect(simulationTick: Function): void&lt;/p&gt;" vertex="1">
+          <mxGeometry height="280" width="400" x="-40" y="80" as="geometry" />
         </mxCell>
-        <mxCell id="X4CWFleY7g2hzE789E_h-2" value="&lt;p style=&quot;margin:0px;margin-top:4px;text-align:center;&quot;&gt;&lt;b&gt;Grid&lt;/b&gt;&lt;/p&gt;&lt;hr size=&quot;1&quot; style=&quot;border-style:solid;&quot;&gt;&lt;p style=&quot;margin:0px;margin-left:4px;&quot;&gt;+ grid: CellData[][]&lt;br&gt;+ rows: Integer&lt;br&gt;+ cols: Integer&lt;br&gt;+ onDrop: Function&lt;br&gt;+ onPaint: Function&lt;br&gt;+ setIsMouseDown: Function&lt;br&gt;+ onRightClick: Function&lt;/p&gt;&lt;hr size=&quot;1&quot; style=&quot;border-style:solid;&quot;&gt;&lt;p style=&quot;margin:0px;margin-left:4px;&quot;&gt;- cellWidth: Number&amp;nbsp;&lt;/p&gt;&lt;p style=&quot;margin:0px;margin-left:4px;&quot;&gt;- cellHeight: Number&amp;nbsp;&lt;/p&gt;&lt;p style=&quot;margin:0px;margin-left:4px;&quot;&gt;- centerLines: Array&amp;nbsp;&lt;/p&gt;&lt;p style=&quot;margin:0px;margin-left:4px;&quot;&gt;- getIsAnyRoad(r: Integer, c: Integer): Boolean&amp;nbsp;&lt;/p&gt;&lt;p style=&quot;margin:0px;margin-left:4px;&quot;&gt;- getIsStraight(r: Integer, c: Integer): Boolean&lt;/p&gt;" style="verticalAlign=top;align=left;overflow=fill;html=1;whiteSpace=wrap;" vertex="1" parent="1">
-          <mxGeometry x="560" y="80" width="320" height="280" as="geometry" />
+        <mxCell id="X4CWFleY7g2hzE789E_h-2" parent="1" style="verticalAlign=top;align=left;overflow=fill;html=1;whiteSpace=wrap;" value="&lt;p style=&quot;margin:0px;margin-top:4px;text-align:center;&quot;&gt;&lt;b&gt;Grid&lt;/b&gt;&lt;/p&gt;&lt;hr size=&quot;1&quot; style=&quot;border-style:solid;&quot;&gt;&lt;p style=&quot;margin:0px;margin-left:4px;&quot;&gt;+ grid: CellData[][]&lt;br&gt;+ rows: Integer&lt;br&gt;+ cols: Integer&lt;br&gt;+ onDrop: Function&lt;br&gt;+ onPaint: Function&lt;br&gt;+ setIsMouseDown: Function&lt;br&gt;+ onRightClick: Function&lt;/p&gt;&lt;hr size=&quot;1&quot; style=&quot;border-style:solid;&quot;&gt;&lt;p style=&quot;margin:0px;margin-left:4px;&quot;&gt;- cellWidth: Number&amp;nbsp;&lt;/p&gt;&lt;p style=&quot;margin:0px;margin-left:4px;&quot;&gt;- cellHeight: Number&amp;nbsp;&lt;/p&gt;&lt;p style=&quot;margin:0px;margin-left:4px;&quot;&gt;- centerLines: Array&amp;nbsp;&lt;/p&gt;&lt;p style=&quot;margin:0px;margin-left:4px;&quot;&gt;- getIsAnyRoad(r: Integer, c: Integer): Boolean&amp;nbsp;&lt;/p&gt;&lt;p style=&quot;margin:0px;margin-left:4px;&quot;&gt;- getIsStraight(r: Integer, c: Integer): Boolean&lt;/p&gt;" vertex="1">
+          <mxGeometry height="280" width="320" x="560" y="80" as="geometry" />
         </mxCell>
-        <mxCell id="X4CWFleY7g2hzE789E_h-3" value="&lt;p style=&quot;margin:0px;margin-top:4px;text-align:center;&quot;&gt;&lt;b&gt;GridCell&lt;/b&gt;&lt;/p&gt;&lt;hr size=&quot;1&quot; style=&quot;border-style:solid;&quot;&gt;&lt;p style=&quot;margin:0px;margin-left:4px;&quot;&gt;+ cellData: CellData&lt;br&gt;+ row: Integer&lt;br&gt;+ col: Integer&lt;br&gt;+ neighborInfo: NeighborInfo&lt;br&gt;+ cellWidth: Number&lt;br&gt;+ cellHeight: Number&lt;br&gt;+ onDrop: Function&lt;br&gt;+ onPaint: Function&lt;br&gt;+ onRightClick: Function&lt;/p&gt;&lt;hr size=&quot;1&quot; style=&quot;border-style:solid;&quot;&gt;&lt;p style=&quot;margin:0px;margin-left:4px;&quot;&gt;- handleDragOver(e: DragEvent): void&amp;nbsp;&lt;/p&gt;&lt;p style=&quot;margin:0px;margin-left:4px;&quot;&gt;- handleDrop(e: DragEvent): void&amp;nbsp;&lt;/p&gt;&lt;p style=&quot;margin:0px;margin-left:4px;&quot;&gt;- handleMouseEnter(e: MouseEvent): void&lt;br/&gt;- handleMouseDown(e: MouseEvent): void&amp;nbsp;&lt;/p&gt;&lt;p style=&quot;margin:0px;margin-left:4px;&quot;&gt;- handleContextMenu(e: MouseEvent): void&lt;/p&gt;" style="verticalAlign=top;align=left;overflow=fill;html=1;whiteSpace=wrap;" vertex="1" parent="1">
-          <mxGeometry x="520" y="480" width="400" height="280" as="geometry" />
+        <mxCell id="X4CWFleY7g2hzE789E_h-3" parent="1" style="verticalAlign=top;align=left;overflow=fill;html=1;whiteSpace=wrap;" value="&lt;p style=&quot;margin:0px;margin-top:4px;text-align:center;&quot;&gt;&lt;b&gt;GridCell&lt;/b&gt;&lt;/p&gt;&lt;hr size=&quot;1&quot; style=&quot;border-style:solid;&quot;&gt;&lt;p style=&quot;margin:0px;margin-left:4px;&quot;&gt;+ cellData: CellData&lt;br&gt;+ row: Integer&lt;br&gt;+ col: Integer&lt;br&gt;+ neighborInfo: NeighborInfo&lt;br&gt;+ cellWidth: Number&lt;br&gt;+ cellHeight: Number&lt;br&gt;+ onDrop: Function&lt;br&gt;+ onPaint: Function&lt;br&gt;+ onRightClick: Function&lt;/p&gt;&lt;hr size=&quot;1&quot; style=&quot;border-style:solid;&quot;&gt;&lt;p style=&quot;margin:0px;margin-left:4px;&quot;&gt;- handleDragOver(e: DragEvent): void&amp;nbsp;&lt;/p&gt;&lt;p style=&quot;margin:0px;margin-left:4px;&quot;&gt;- handleDrop(e: DragEvent): void&amp;nbsp;&lt;/p&gt;&lt;p style=&quot;margin:0px;margin-left:4px;&quot;&gt;- handleMouseEnter(e: MouseEvent): void&lt;br/&gt;- handleMouseDown(e: MouseEvent): void&amp;nbsp;&lt;/p&gt;&lt;p style=&quot;margin:0px;margin-left:4px;&quot;&gt;- handleContextMenu(e: MouseEvent): void&lt;/p&gt;" vertex="1">
+          <mxGeometry height="280" width="400" x="520" y="480" as="geometry" />
         </mxCell>
-        <mxCell id="X4CWFleY7g2hzE789E_h-4" value="&lt;p style=&quot;margin:0px;margin-top:4px;text-align:center;&quot;&gt;PaletteItem&lt;/p&gt;&lt;hr size=&quot;1&quot; style=&quot;border-style:solid;&quot;&gt;&lt;p style=&quot;margin:0px;margin-left:4px;&quot;&gt;+ item: PaletteItemData&amp;nbsp;&lt;/p&gt;&lt;p style=&quot;margin:0px;margin-left:4px;&quot;&gt;+ isSelected: Boolean&amp;nbsp;&lt;/p&gt;&lt;p style=&quot;margin:0px;margin-left:4px;&quot;&gt;+ onClick: Function&lt;br&gt;- handleDragStart(e: DragEvent): void&lt;/p&gt;&lt;hr size=&quot;1&quot; style=&quot;border-style:solid;&quot;&gt;&lt;p style=&quot;margin:0px;margin-left:4px;&quot;&gt;- handleDragStart(e: DragEvent): void&lt;/p&gt;" style="verticalAlign=top;align=left;overflow=fill;html=1;whiteSpace=wrap;" vertex="1" parent="1">
-          <mxGeometry x="40" y="480" width="240" height="160" as="geometry" />
+        <mxCell id="X4CWFleY7g2hzE789E_h-4" parent="1" style="verticalAlign=top;align=left;overflow=fill;html=1;whiteSpace=wrap;" value="&lt;p style=&quot;margin:0px;margin-top:4px;text-align:center;&quot;&gt;PaletteItem&lt;/p&gt;&lt;hr size=&quot;1&quot; style=&quot;border-style:solid;&quot;&gt;&lt;p style=&quot;margin:0px;margin-left:4px;&quot;&gt;+ item: PaletteItemData&amp;nbsp;&lt;/p&gt;&lt;p style=&quot;margin:0px;margin-left:4px;&quot;&gt;+ isSelected: Boolean&amp;nbsp;&lt;/p&gt;&lt;p style=&quot;margin:0px;margin-left:4px;&quot;&gt;+ onClick: Function&lt;br&gt;- handleDragStart(e: DragEvent): void&lt;/p&gt;&lt;hr size=&quot;1&quot; style=&quot;border-style:solid;&quot;&gt;&lt;p style=&quot;margin:0px;margin-left:4px;&quot;&gt;- handleDragStart(e: DragEvent): void&lt;/p&gt;" vertex="1">
+          <mxGeometry height="160" width="240" x="40" y="480" as="geometry" />
         </mxCell>
-        <mxCell id="X4CWFleY7g2hzE789E_h-5" value="&lt;p style=&quot;margin:0px;margin-top:4px;text-align:center;&quot;&gt;CellData&lt;/p&gt;&lt;hr size=&quot;1&quot; style=&quot;border-style:solid;&quot;&gt;&lt;p style=&quot;margin:0px;margin-left:4px;&quot;&gt;+ type: String&amp;nbsp;&lt;/p&gt;&lt;p style=&quot;margin:0px;margin-left:4px;&quot;&gt;+ hasCar: String | Boolean&lt;/p&gt;&lt;hr size=&quot;1&quot; style=&quot;border-style:solid;&quot;&gt;&lt;p style=&quot;margin:0px;margin-left:4px;&quot;&gt;&lt;br&gt;&lt;/p&gt;" style="verticalAlign=top;align=left;overflow=fill;html=1;whiteSpace=wrap;" vertex="1" parent="1">
-          <mxGeometry x="520" y="840" width="160" height="90" as="geometry" />
+        <mxCell id="X4CWFleY7g2hzE789E_h-5" parent="1" style="verticalAlign=top;align=left;overflow=fill;html=1;whiteSpace=wrap;" value="&lt;p style=&quot;margin:0px;margin-top:4px;text-align:center;&quot;&gt;CellData&lt;/p&gt;&lt;hr size=&quot;1&quot; style=&quot;border-style:solid;&quot;&gt;&lt;p style=&quot;margin:0px;margin-left:4px;&quot;&gt;+ type: String&amp;nbsp;&lt;/p&gt;&lt;p style=&quot;margin:0px;margin-left:4px;&quot;&gt;+ hasCar: String | Boolean&lt;/p&gt;&lt;hr size=&quot;1&quot; style=&quot;border-style:solid;&quot;&gt;&lt;p style=&quot;margin:0px;margin-left:4px;&quot;&gt;&lt;br&gt;&lt;/p&gt;" vertex="1">
+          <mxGeometry height="90" width="160" x="520" y="840" as="geometry" />
         </mxCell>
-        <mxCell id="X4CWFleY7g2hzE789E_h-6" value="&lt;p style=&quot;margin:0px;margin-top:4px;text-align:center;&quot;&gt;NeighborInfo&lt;/p&gt;&lt;hr size=&quot;1&quot; style=&quot;border-style:solid;&quot;&gt;&lt;p style=&quot;margin:0px;margin-left:4px;&quot;&gt;+ up: Boolean&amp;nbsp;&lt;/p&gt;&lt;p style=&quot;margin:0px;margin-left:4px;&quot;&gt;+ down: Boolean&amp;nbsp;&lt;/p&gt;&lt;p style=&quot;margin:0px;margin-left:4px;&quot;&gt;+ left: Boolean&amp;nbsp;&lt;/p&gt;&lt;p style=&quot;margin:0px;margin-left:4px;&quot;&gt;+ right: Boolean&lt;/p&gt;&lt;hr size=&quot;1&quot; style=&quot;border-style:solid;&quot;&gt;&lt;p style=&quot;margin:0px;margin-left:4px;&quot;&gt;&lt;br&gt;&lt;/p&gt;" style="verticalAlign=top;align=left;overflow=fill;html=1;whiteSpace=wrap;" vertex="1" parent="1">
-          <mxGeometry x="760" y="840" width="160" height="170" as="geometry" />
+        <mxCell id="X4CWFleY7g2hzE789E_h-6" parent="1" style="verticalAlign=top;align=left;overflow=fill;html=1;whiteSpace=wrap;" value="&lt;p style=&quot;margin:0px;margin-top:4px;text-align:center;&quot;&gt;NeighborInfo&lt;/p&gt;&lt;hr size=&quot;1&quot; style=&quot;border-style:solid;&quot;&gt;&lt;p style=&quot;margin:0px;margin-left:4px;&quot;&gt;+ up: Boolean&amp;nbsp;&lt;/p&gt;&lt;p style=&quot;margin:0px;margin-left:4px;&quot;&gt;+ down: Boolean&amp;nbsp;&lt;/p&gt;&lt;p style=&quot;margin:0px;margin-left:4px;&quot;&gt;+ left: Boolean&amp;nbsp;&lt;/p&gt;&lt;p style=&quot;margin:0px;margin-left:4px;&quot;&gt;+ right: Boolean&lt;/p&gt;&lt;hr size=&quot;1&quot; style=&quot;border-style:solid;&quot;&gt;&lt;p style=&quot;margin:0px;margin-left:4px;&quot;&gt;&lt;br&gt;&lt;/p&gt;" vertex="1">
+          <mxGeometry height="170" width="160" x="760" y="840" as="geometry" />
         </mxCell>
-        <mxCell id="X4CWFleY7g2hzE789E_h-7" value="&lt;p style=&quot;margin:0px;margin-top:4px;text-align:center;&quot;&gt;PaletteItemData&lt;/p&gt;&lt;hr size=&quot;1&quot; style=&quot;border-style:solid;&quot;&gt;&lt;p style=&quot;margin:0px;margin-left:4px;&quot;&gt;+ type: String&amp;nbsp;&lt;/p&gt;&lt;p style=&quot;margin:0px;margin-left:4px;&quot;&gt;+ label: String&amp;nbsp;&lt;/p&gt;&lt;p style=&quot;margin:0px;margin-left:4px;&quot;&gt;+ emoji: String&lt;/p&gt;&lt;hr size=&quot;1&quot; style=&quot;border-style:solid;&quot;&gt;&lt;p style=&quot;margin:0px;margin-left:4px;&quot;&gt;&lt;br&gt;&lt;/p&gt;" style="verticalAlign=top;align=left;overflow=fill;html=1;whiteSpace=wrap;" vertex="1" parent="1">
-          <mxGeometry x="80" y="710" width="160" height="150" as="geometry" />
+        <mxCell id="X4CWFleY7g2hzE789E_h-7" parent="1" style="verticalAlign=top;align=left;overflow=fill;html=1;whiteSpace=wrap;" value="&lt;p style=&quot;margin:0px;margin-top:4px;text-align:center;&quot;&gt;PaletteItemData&lt;/p&gt;&lt;hr size=&quot;1&quot; style=&quot;border-style:solid;&quot;&gt;&lt;p style=&quot;margin:0px;margin-left:4px;&quot;&gt;+ type: String&amp;nbsp;&lt;/p&gt;&lt;p style=&quot;margin:0px;margin-left:4px;&quot;&gt;+ label: String&amp;nbsp;&lt;/p&gt;&lt;p style=&quot;margin:0px;margin-left:4px;&quot;&gt;+ emoji: String&lt;/p&gt;&lt;hr size=&quot;1&quot; style=&quot;border-style:solid;&quot;&gt;&lt;p style=&quot;margin:0px;margin-left:4px;&quot;&gt;&lt;br&gt;&lt;/p&gt;" vertex="1">
+          <mxGeometry height="150" width="160" x="80" y="710" as="geometry" />
         </mxCell>
-        <mxCell id="X4CWFleY7g2hzE789E_h-8" value="" style="endArrow=open;endFill=1;endSize=12;html=1;rounded=0;" edge="1" parent="1">
-          <mxGeometry width="160" relative="1" as="geometry">
+        <mxCell id="X4CWFleY7g2hzE789E_h-8" edge="1" parent="1" style="endArrow=open;endFill=1;endSize=12;html=1;rounded=0;" value="">
+          <mxGeometry relative="1" width="160" as="geometry">
             <mxPoint x="380" y="219.5" as="sourcePoint" />
             <mxPoint x="540" y="219.5" as="targetPoint" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="X4CWFleY7g2hzE789E_h-9" value="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" vertex="1" parent="1">
-          <mxGeometry x="360" y="190" width="60" height="30" as="geometry" />
+        <mxCell id="X4CWFleY7g2hzE789E_h-9" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" value="1" vertex="1">
+          <mxGeometry height="30" width="60" x="360" y="190" as="geometry" />
         </mxCell>
-        <mxCell id="X4CWFleY7g2hzE789E_h-13" value="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" vertex="1" parent="1">
-          <mxGeometry x="480" y="190" width="60" height="30" as="geometry" />
+        <mxCell id="X4CWFleY7g2hzE789E_h-13" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" value="1" vertex="1">
+          <mxGeometry height="30" width="60" x="480" y="190" as="geometry" />
         </mxCell>
-        <mxCell id="X4CWFleY7g2hzE789E_h-14" value="" style="endArrow=open;endFill=1;endSize=12;html=1;rounded=0;" edge="1" parent="1">
-          <mxGeometry width="160" relative="1" as="geometry">
+        <mxCell id="X4CWFleY7g2hzE789E_h-14" edge="1" parent="1" style="endArrow=open;endFill=1;endSize=12;html=1;rounded=0;" value="">
+          <mxGeometry relative="1" width="160" as="geometry">
             <mxPoint x="160" y="380" as="sourcePoint" />
             <mxPoint x="160" y="460" as="targetPoint" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="X4CWFleY7g2hzE789E_h-15" value="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" vertex="1" parent="1">
-          <mxGeometry x="160" y="370" width="60" height="30" as="geometry" />
+        <mxCell id="X4CWFleY7g2hzE789E_h-15" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" value="1" vertex="1">
+          <mxGeometry height="30" width="60" x="160" y="370" as="geometry" />
         </mxCell>
-        <mxCell id="X4CWFleY7g2hzE789E_h-16" value="1..*" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" vertex="1" parent="1">
-          <mxGeometry x="160" y="430" width="60" height="30" as="geometry" />
+        <mxCell id="X4CWFleY7g2hzE789E_h-16" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" value="1..*" vertex="1">
+          <mxGeometry height="30" width="60" x="160" y="430" as="geometry" />
         </mxCell>
-        <mxCell id="X4CWFleY7g2hzE789E_h-17" value="" style="endArrow=open;endFill=1;endSize=12;html=1;rounded=0;edgeStyle=orthogonalEdgeStyle;" edge="1" parent="1">
-          <mxGeometry width="160" relative="1" as="geometry">
-            <mxPoint x="370" y="280" as="sourcePoint" />
-            <mxPoint x="480" y="600" as="targetPoint" />
+        <mxCell id="X4CWFleY7g2hzE789E_h-17" edge="1" parent="1" style="endArrow=open;endFill=1;endSize=12;html=1;rounded=0;edgeStyle=orthogonalEdgeStyle;" value="">
+          <mxGeometry relative="1" width="160" as="geometry">
             <Array as="points">
-              <mxPoint x="450" y="280" />
-              <mxPoint x="450" y="600" />
+              <mxPoint x="720" y="440" />
             </Array>
+            <mxPoint x="720" y="370" as="sourcePoint" />
+            <mxPoint x="720" y="460" as="targetPoint" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="X4CWFleY7g2hzE789E_h-18" value="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" vertex="1" parent="1">
-          <mxGeometry x="370" y="250" width="60" height="30" as="geometry" />
+        <mxCell id="X4CWFleY7g2hzE789E_h-18" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" value="1" vertex="1">
+          <mxGeometry height="30" width="60" x="720" y="370" as="geometry" />
         </mxCell>
-        <mxCell id="X4CWFleY7g2hzE789E_h-20" value="1..*" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" vertex="1" parent="1">
-          <mxGeometry x="460" y="560" width="60" height="30" as="geometry" />
+        <mxCell id="X4CWFleY7g2hzE789E_h-20" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" value="1..*" vertex="1">
+          <mxGeometry height="30" width="60" x="720" y="430" as="geometry" />
         </mxCell>
-        <mxCell id="X4CWFleY7g2hzE789E_h-21" value="&lt;p style=&quot;margin:0px;margin-top:4px;text-align:center;&quot;&gt;RenderUtils&lt;/p&gt;&lt;hr size=&quot;1&quot; style=&quot;border-style:solid;&quot;&gt;&lt;p style=&quot;margin:0px;margin-left:4px;&quot;&gt;&lt;br&gt;&lt;/p&gt;&lt;hr size=&quot;1&quot; style=&quot;border-style:solid;&quot;&gt;&lt;p style=&quot;margin:0px;margin-left:4px;&quot;&gt;+ createEmptyGrid(rows: Integer, cols: Integer): CellData[][]&lt;br&gt;+ renderCar(direction: String): SVGElement&lt;br&gt;+ renderCellContent(cellData: CellData, neighborInfo: NeighborInfo): SVGElement&lt;/p&gt;" style="verticalAlign=top;align=left;overflow=fill;html=1;whiteSpace=wrap;" vertex="1" parent="1">
-          <mxGeometry x="1080" y="560" width="470" height="120" as="geometry" />
+        <mxCell id="X4CWFleY7g2hzE789E_h-21" parent="1" style="verticalAlign=top;align=left;overflow=fill;html=1;whiteSpace=wrap;" value="&lt;p style=&quot;margin:0px;margin-top:4px;text-align:center;&quot;&gt;RenderUtils&lt;/p&gt;&lt;hr size=&quot;1&quot; style=&quot;border-style:solid;&quot;&gt;&lt;p style=&quot;margin:0px;margin-left:4px;&quot;&gt;&lt;br&gt;&lt;/p&gt;&lt;hr size=&quot;1&quot; style=&quot;border-style:solid;&quot;&gt;&lt;p style=&quot;margin:0px;margin-left:4px;&quot;&gt;+ createEmptyGrid(rows: Integer, cols: Integer): CellData[][]&lt;br&gt;+ renderCar(direction: String): SVGElement&lt;br&gt;+ renderCellContent(cellData: CellData, neighborInfo: NeighborInfo): SVGElement&lt;/p&gt;" vertex="1">
+          <mxGeometry height="120" width="470" x="1080" y="560" as="geometry" />
         </mxCell>
-        <mxCell id="X4CWFleY7g2hzE789E_h-22" value="Use" style="endArrow=open;endSize=12;dashed=1;html=1;rounded=0;" edge="1" parent="1">
-          <mxGeometry width="160" relative="1" as="geometry">
+        <mxCell id="X4CWFleY7g2hzE789E_h-22" edge="1" parent="1" style="endArrow=open;endSize=12;dashed=1;html=1;rounded=0;" value="Use">
+          <mxGeometry relative="1" width="160" as="geometry">
             <mxPoint x="940" y="619.5" as="sourcePoint" />
             <mxPoint x="1050" y="619.5" as="targetPoint" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="X4CWFleY7g2hzE789E_h-23" value="" style="endArrow=open;endFill=1;endSize=12;html=1;rounded=0;" edge="1" parent="1">
-          <mxGeometry width="160" relative="1" as="geometry">
+        <mxCell id="X4CWFleY7g2hzE789E_h-23" edge="1" parent="1" style="endArrow=open;endFill=1;endSize=12;html=1;rounded=0;" value="">
+          <mxGeometry relative="1" width="160" as="geometry">
             <mxPoint x="600" y="780" as="sourcePoint" />
             <mxPoint x="600" y="820" as="targetPoint" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="X4CWFleY7g2hzE789E_h-24" value="" style="endArrow=open;endFill=1;endSize=12;html=1;rounded=0;" edge="1" parent="1">
-          <mxGeometry width="160" relative="1" as="geometry">
+        <mxCell id="X4CWFleY7g2hzE789E_h-24" edge="1" parent="1" style="endArrow=open;endFill=1;endSize=12;html=1;rounded=0;" value="">
+          <mxGeometry relative="1" width="160" as="geometry">
             <mxPoint x="839.5" y="780" as="sourcePoint" />
             <mxPoint x="839.5" y="820" as="targetPoint" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="X4CWFleY7g2hzE789E_h-26" value="" style="endArrow=open;endFill=1;endSize=12;html=1;rounded=0;" edge="1" parent="1">
-          <mxGeometry width="160" relative="1" as="geometry">
+        <mxCell id="X4CWFleY7g2hzE789E_h-26" edge="1" parent="1" style="endArrow=open;endFill=1;endSize=12;html=1;rounded=0;" value="">
+          <mxGeometry relative="1" width="160" as="geometry">
             <mxPoint x="160" y="660" as="sourcePoint" />
             <mxPoint x="160" y="700" as="targetPoint" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="X4CWFleY7g2hzE789E_h-27" value="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" vertex="1" parent="1">
-          <mxGeometry x="160" y="650" width="60" height="30" as="geometry" />
+        <mxCell id="X4CWFleY7g2hzE789E_h-27" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" value="1" vertex="1">
+          <mxGeometry height="30" width="60" x="160" y="650" as="geometry" />
         </mxCell>
-        <mxCell id="X4CWFleY7g2hzE789E_h-28" value="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" vertex="1" parent="1">
-          <mxGeometry x="160" y="680" width="60" height="30" as="geometry" />
+        <mxCell id="X4CWFleY7g2hzE789E_h-28" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" value="1" vertex="1">
+          <mxGeometry height="30" width="60" x="160" y="680" as="geometry" />
         </mxCell>
-        <mxCell id="X4CWFleY7g2hzE789E_h-29" value="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" vertex="1" parent="1">
-          <mxGeometry x="600" y="770" width="60" height="30" as="geometry" />
+        <mxCell id="X4CWFleY7g2hzE789E_h-29" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" value="1" vertex="1">
+          <mxGeometry height="30" width="60" x="600" y="770" as="geometry" />
         </mxCell>
-        <mxCell id="X4CWFleY7g2hzE789E_h-30" value="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" vertex="1" parent="1">
-          <mxGeometry x="600" y="800" width="60" height="30" as="geometry" />
+        <mxCell id="X4CWFleY7g2hzE789E_h-30" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" value="1" vertex="1">
+          <mxGeometry height="30" width="60" x="600" y="800" as="geometry" />
         </mxCell>
-        <mxCell id="X4CWFleY7g2hzE789E_h-31" value="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" vertex="1" parent="1">
-          <mxGeometry x="840" y="770" width="60" height="30" as="geometry" />
+        <mxCell id="X4CWFleY7g2hzE789E_h-31" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" value="1" vertex="1">
+          <mxGeometry height="30" width="60" x="840" y="770" as="geometry" />
         </mxCell>
-        <mxCell id="X4CWFleY7g2hzE789E_h-32" value="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" vertex="1" parent="1">
-          <mxGeometry x="840" y="800" width="60" height="30" as="geometry" />
+        <mxCell id="X4CWFleY7g2hzE789E_h-32" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" value="1" vertex="1">
+          <mxGeometry height="30" width="60" x="840" y="800" as="geometry" />
         </mxCell>
       </root>
     </mxGraphModel>
