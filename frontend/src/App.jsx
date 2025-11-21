@@ -1,11 +1,9 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 
-// --- Constants ---
 const TOTAL_GRID_WIDTH_PX = 19 * 64;
 const TOTAL_GRID_HEIGHT_PX = 12 * 64;
 const RATIO = 1.5625;
 
-// --- Palettes ---
 const MAIN_PALETTE_ITEMS = [
   { type: "select", label: "Select", emoji: "👆" },
   { type: "road_menu", label: "Road", emoji: "🛣️" },
@@ -17,41 +15,28 @@ const MAIN_PALETTE_ITEMS = [
 ];
 
 const ROAD_PALETTE_ITEMS = [
-  { type: "road_straight", label: "Straight", emoji: "➖" },
+  { type: "road_straight_vertical", label: "Vertical Road", emoji: "⬆️" },
+  { type: "road_straight_horizontal", label: "Horizontal Road", emoji: "➡️" },
   { type: "road_intersection", label: "Intersection", emoji: "➕" },
   { type: "back", label: "Back", emoji: "⬅️" },
 ];
 
-// --- Helper Functions ---
 const createEmptyGrid = (rows, cols) =>
   Array.from({ length: rows }, () => Array(cols).fill(null));
 
-/**
- * Renders the SVG Car with rotation based on direction
- */
 const renderCar = (direction) => {
-  // Map direction string to degrees
   let rotation = 0;
   if (direction === "right") rotation = 90;
   if (direction === "down") rotation = 180;
   if (direction === "left") rotation = 270;
-  // "up" is 0
 
   return (
-    <g transform={`translate(50, 50) rotate(${rotation}) translate(-25, -30)`}>
-      {/* Adjusted translate to center the rotation: 
-          Original car is approx 50x60. Center is 25,30.
-          We move to cell center (50,50), rotate, then offset by half car size.
-      */}
-
-      {/* Shadow */}
+    <g transform={`translate(50,50) rotate(${rotation}) translate(-25,-30)`}>
       <rect x="2" y="4" width="50" height="60" rx="8" fill="rgba(0,0,0,0.2)" />
-      {/* Tires */}
       <rect x="-4" y="8" width="8" height="12" rx="2" fill="#333" />
       <rect x="46" y="8" width="8" height="12" rx="2" fill="#333" />
       <rect x="-4" y="40" width="8" height="12" rx="2" fill="#333" />
       <rect x="46" y="40" width="8" height="12" rx="2" fill="#333" />
-      {/* Body */}
       <rect
         x="0"
         y="0"
@@ -62,11 +47,8 @@ const renderCar = (direction) => {
         stroke="#991B1B"
         strokeWidth="2"
       />
-      {/* Windshield */}
       <rect x="5" y="8" width="40" height="10" rx="2" fill="#93C5FD" />
-      {/* Rear window */}
       <rect x="5" y="42" width="40" height="8" rx="2" fill="#93C5FD" />
-      {/* Roof */}
       <rect
         x="6"
         y="20"
@@ -82,160 +64,120 @@ const renderCar = (direction) => {
 
 const renderCellContent = (cellData, neighborInfo) => {
   const cellType = cellData?.type;
-  // hasCar is now a string (direction) or false/null
   const carDirection = cellData?.hasCar;
-
   const content = [];
 
-  // --- 1. Render BASE ---
-  if (cellType) {
-    const isRoad =
-      cellType === "road_intersection" || cellType === "road_straight";
+  const strokeColor = "#4A5568";
+  const strokeWidth = 80;
+  const center = 50;
 
-    if (!isRoad) {
-      const item =
-        MAIN_PALETTE_ITEMS.find((p) => p.type === cellType) ||
-        ROAD_PALETTE_ITEMS.find((p) => p.type === cellType);
-
-      if (item) {
-        content.push(
-          <foreignObject key="base" x="0" y="0" width="100" height="100">
-            <div className="w-full h-full flex items-center justify-center text-3xl">
-              {item.emoji}
-            </div>
-          </foreignObject>
-        );
-      }
-    } else {
-      const strokeColor = "#4A5568";
-      const strokeWidth = 80;
-      const center = 50;
-
-      const { up, down, left, right } = neighborInfo;
-      const neighborCount = up + down + left + right;
-
-      if (cellType === "road_intersection" && neighborCount === 2) {
-        if (up && right) {
-          content.push(
-            <polyline
-              key="ur"
-              points="101,50 50,50 50,-1"
-              stroke={strokeColor}
-              strokeWidth={strokeWidth}
-              strokeLinejoin="round"
-              strokeLinecap="round"
-              fill="none"
-            />
-          );
-        } else if (up && left) {
-          content.push(
-            <polyline
-              key="ul"
-              points="-1,50 50,50 50,-1"
-              stroke={strokeColor}
-              strokeWidth={strokeWidth}
-              strokeLinejoin="round"
-              strokeLinecap="round"
-              fill="none"
-            />
-          );
-        } else if (down && right) {
-          content.push(
-            <polyline
-              key="dr"
-              points="101,50 50,50 50,101"
-              stroke={strokeColor}
-              strokeWidth={strokeWidth}
-              strokeLinejoin="round"
-              strokeLinecap="round"
-              fill="none"
-            />
-          );
-        } else if (down && left) {
-          content.push(
-            <polyline
-              key="dl"
-              points="-1,50 50,50 50,101"
-              stroke={strokeColor}
-              strokeWidth={strokeWidth}
-              strokeLinejoin="round"
-              strokeLinecap="round"
-              fill="none"
-            />
-          );
-        }
-      }
-
-      if (content.length === 0) {
-        if (up)
-          content.push(
-            <line
-              key="up"
-              x1={center}
-              y1={center}
-              x2={center}
-              y2={-1}
-              stroke={strokeColor}
-              strokeWidth={strokeWidth}
-              strokeLinecap="round"
-            />
-          );
-        if (down)
-          content.push(
-            <line
-              key="down"
-              x1={center}
-              y1={center}
-              x2={center}
-              y2={101}
-              stroke={strokeColor}
-              strokeWidth={strokeWidth}
-              strokeLinecap="round"
-            />
-          );
-        if (left)
-          content.push(
-            <line
-              key="left"
-              x1={center}
-              y1={center}
-              x2={-1}
-              y2={center}
-              stroke={strokeColor}
-              strokeWidth={strokeWidth}
-              strokeLinecap="round"
-            />
-          );
-        if (right)
-          content.push(
-            <line
-              key="right"
-              x1={center}
-              y1={center}
-              x2={101}
-              y2={center}
-              stroke={strokeColor}
-              strokeWidth={strokeWidth}
-              strokeLinecap="round"
-            />
-          );
-      }
-
-      if (neighborCount === 0 && content.length === 0) {
-        content.push(
-          <circle
-            key="dot"
-            cx={center}
-            cy={center}
-            r={strokeWidth / 2}
-            fill={strokeColor}
-          />
-        );
-      }
+  if (cellType === "road_intersection") {
+    const { up, down, left, right } = neighborInfo;
+    // Draw segments based on which roads neighbor the intersection
+    if (up)
+      content.push(
+        <line
+          key="up"
+          x1={center}
+          y1={center}
+          x2={center}
+          y2={-1}
+          stroke={strokeColor}
+          strokeWidth={strokeWidth}
+          strokeLinecap="round"
+        />
+      );
+    if (down)
+      content.push(
+        <line
+          key="down"
+          x1={center}
+          y1={center}
+          x2={center}
+          y2={101}
+          stroke={strokeColor}
+          strokeWidth={strokeWidth}
+          strokeLinecap="round"
+        />
+      );
+    if (left)
+      content.push(
+        <line
+          key="left"
+          x1={center}
+          y1={center}
+          x2={-1}
+          y2={center}
+          stroke={strokeColor}
+          strokeWidth={strokeWidth}
+          strokeLinecap="round"
+        />
+      );
+    if (right)
+      content.push(
+        <line
+          key="right"
+          x1={center}
+          y1={center}
+          x2={101}
+          y2={center}
+          stroke={strokeColor}
+          strokeWidth={strokeWidth}
+          strokeLinecap="round"
+        />
+      );
+    if (!(up || down || left || right)) {
+      content.push(
+        <circle
+          key="dot"
+          cx={center}
+          cy={center}
+          r={strokeWidth / 2}
+          fill={strokeColor}
+        />
+      );
+    }
+  } else if (cellType === "road_straight_vertical") {
+    content.push(
+      <line
+        key="vertical"
+        x1={center}
+        y1={-1}
+        x2={center}
+        y2={101}
+        stroke={strokeColor}
+        strokeWidth={strokeWidth}
+        strokeLinecap="round"
+      />
+    );
+  } else if (cellType === "road_straight_horizontal") {
+    content.push(
+      <line
+        key="horizontal"
+        x1={-1}
+        y1={center}
+        x2={101}
+        y2={center}
+        stroke={strokeColor}
+        strokeWidth={strokeWidth}
+        strokeLinecap="round"
+      />
+    );
+  } else if (cellType) {
+    const item =
+      MAIN_PALETTE_ITEMS.find((p) => p.type === cellType) ||
+      ROAD_PALETTE_ITEMS.find((p) => p.type === cellType);
+    if (item) {
+      content.push(
+        <foreignObject key="base" x="0" y="0" width="100" height="100">
+          <div className="w-full h-full flex items-center justify-center text-3xl">
+            {item.emoji}
+          </div>
+        </foreignObject>
+      );
     }
   }
 
-  // --- 2. Render CAR ---
   if (carDirection) {
     content.push(
       <React.Fragment key="car">{renderCar(carDirection)}</React.Fragment>
@@ -253,7 +195,6 @@ const renderCellContent = (cellData, neighborInfo) => {
   );
 };
 
-// --- Grid Cell Component ---
 const GridCell = React.memo(
   ({
     cellData,
@@ -281,7 +222,6 @@ const GridCell = React.memo(
       e.preventDefault();
       onRightClick(row, col);
     };
-
     return (
       <div
         style={{
@@ -304,7 +244,6 @@ const GridCell = React.memo(
   }
 );
 
-// --- Grid Component ---
 const Grid = ({
   grid,
   rows,
@@ -317,22 +256,30 @@ const Grid = ({
   const cellWidth = TOTAL_GRID_WIDTH_PX / cols;
   const cellHeight = TOTAL_GRID_HEIGHT_PX / rows;
 
-  const getIsAnyRoad = (r, c) => {
-    if (r < 0 || r >= rows || c < 0 || c >= cols) return false;
-    const cell = grid[r][c];
-    return (
-      cell &&
-      (cell.type === "road_intersection" || cell.type === "road_straight")
-    );
-  };
+  const getIsVerticalRoad = (r, c) =>
+    r >= 0 &&
+    r < rows &&
+    c >= 0 &&
+    c < cols &&
+    grid[r][c] &&
+    grid[r][c].type === "road_straight_vertical";
+  const getIsHorizontalRoad = (r, c) =>
+    r >= 0 &&
+    r < rows &&
+    c >= 0 &&
+    c < cols &&
+    grid[r][c] &&
+    grid[r][c].type === "road_straight_horizontal";
+  const getIsIntersection = (r, c) =>
+    r >= 0 &&
+    r < rows &&
+    c >= 0 &&
+    c < cols &&
+    grid[r][c] &&
+    grid[r][c].type === "road_intersection";
+  const getIsAnyRoad = (r, c) =>
+    getIsVerticalRoad(r, c) || getIsHorizontalRoad(r, c) || getIsIntersection(r, c);
 
-  const getIsStraight = (r, c) => {
-    if (r < 0 || r >= rows || c < 0 || c >= cols) return false;
-    const cell = grid[r][c];
-    return cell && cell.type === "road_straight";
-  };
-
-  // Centerlines Logic
   const centerLines = [];
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
@@ -340,23 +287,76 @@ const Grid = ({
       const cx = (c + 0.5) * cellWidth;
       const cy = (r + 0.5) * cellHeight;
 
-      if (getIsAnyRoad(r, c + 1)) {
-        centerLines.push({
-          x1: cx,
-          y1: cy,
-          x2: (c + 1.5) * cellWidth,
-          y2: cy,
-          key: `h-${r}-${c}`,
-        });
-      }
-      if (getIsAnyRoad(r + 1, c)) {
-        centerLines.push({
-          x1: cx,
-          y1: cy,
-          x2: cx,
-          y2: (r + 1.5) * cellHeight,
-          key: `v-${r}-${c}`,
-        });
+      // Only connect matching road types and intersections
+      if (
+        getIsIntersection(r, c)
+      ) {
+        if (getIsVerticalRoad(r - 1, c) || getIsIntersection(r - 1, c))
+          centerLines.push({
+            x1: cx,
+            y1: cy,
+            x2: cx,
+            y2: cy - cellHeight,
+            key: `i-vu-${r}-${c}`,
+          });
+        if (getIsVerticalRoad(r + 1, c) || getIsIntersection(r + 1, c))
+          centerLines.push({
+            x1: cx,
+            y1: cy,
+            x2: cx,
+            y2: cy + cellHeight,
+            key: `i-vd-${r}-${c}`,
+          });
+        if (getIsHorizontalRoad(r, c - 1) || getIsIntersection(r, c - 1))
+          centerLines.push({
+            x1: cx,
+            y1: cy,
+            x2: cx - cellWidth,
+            y2: cy,
+            key: `i-hl-${r}-${c}`,
+          });
+        if (getIsHorizontalRoad(r, c + 1) || getIsIntersection(r, c + 1))
+          centerLines.push({
+            x1: cx,
+            y1: cy,
+            x2: cx + cellWidth,
+            y2: cy,
+            key: `i-hr-${r}-${c}`,
+          });
+      } else if (getIsVerticalRoad(r, c)) {
+        if (getIsVerticalRoad(r - 1, c) || getIsIntersection(r - 1, c))
+          centerLines.push({
+            x1: cx,
+            y1: cy,
+            x2: cx,
+            y2: cy - cellHeight,
+            key: `v-up-${r}-${c}`,
+          });
+        if (getIsVerticalRoad(r + 1, c) || getIsIntersection(r + 1, c))
+          centerLines.push({
+            x1: cx,
+            y1: cy,
+            x2: cx,
+            y2: cy + cellHeight,
+            key: `v-down-${r}-${c}`,
+          });
+      } else if (getIsHorizontalRoad(r, c)) {
+        if (getIsHorizontalRoad(r, c - 1) || getIsIntersection(r, c - 1))
+          centerLines.push({
+            x1: cx,
+            y1: cy,
+            x2: cx - cellWidth,
+            y2: cy,
+            key: `h-left-${r}-${c}`,
+          });
+        if (getIsHorizontalRoad(r, c + 1) || getIsIntersection(r, c + 1))
+          centerLines.push({
+            x1: cx,
+            y1: cy,
+            x2: cx + cellWidth,
+            y2: cy,
+            key: `h-right-${r}-${c}`,
+          });
       }
     }
   }
@@ -376,65 +376,29 @@ const Grid = ({
       {grid.flatMap((row, rowIndex) =>
         row.map((cellData, colIndex) => {
           const cellType = cellData?.type || null;
-          let neighborInfo = null;
+          let neighborInfo = { up: false, down: false, left: false, right: false };
 
           if (cellType === "road_intersection") {
             neighborInfo = {
-              up: getIsAnyRoad(rowIndex - 1, colIndex),
-              down: getIsAnyRoad(rowIndex + 1, colIndex),
-              left: getIsAnyRoad(rowIndex, colIndex - 1),
-              right: getIsAnyRoad(rowIndex, colIndex + 1),
+              up: getIsVerticalRoad(rowIndex - 1, colIndex) || getIsIntersection(rowIndex - 1, colIndex),
+              down: getIsVerticalRoad(rowIndex + 1, colIndex) || getIsIntersection(rowIndex + 1, colIndex),
+              left: getIsHorizontalRoad(rowIndex, colIndex - 1) || getIsIntersection(rowIndex, colIndex - 1),
+              right: getIsHorizontalRoad(rowIndex, colIndex + 1) || getIsIntersection(rowIndex, colIndex + 1),
             };
-          } else if (cellType === "road_straight") {
-            // Simplified logic for brevity, identical to previous
-            const n_up = getIsAnyRoad(rowIndex - 1, colIndex);
-            const n_down = getIsAnyRoad(rowIndex + 1, colIndex);
-            const n_left = getIsAnyRoad(rowIndex, colIndex - 1);
-            const n_right = getIsAnyRoad(rowIndex, colIndex + 1);
-
-            // Infer connections based on neighbors and straight-road neighbors
-            const hasStraightV =
-              getIsStraight(rowIndex - 1, colIndex) ||
-              getIsStraight(rowIndex + 1, colIndex);
-            const hasStraightH =
-              getIsStraight(rowIndex, colIndex - 1) ||
-              getIsStraight(rowIndex + 1, colIndex + 1);
-
-            if (hasStraightV)
-              neighborInfo = {
-                up: n_up,
-                down: n_down,
-                left: false,
-                right: false,
-              };
-            else if (hasStraightH)
-              neighborInfo = {
-                up: false,
-                down: false,
-                left: n_left,
-                right: n_right,
-              };
-            else if (n_up || n_down)
-              neighborInfo = {
-                up: n_up,
-                down: n_down,
-                left: false,
-                right: false,
-              };
-            else if (n_left || n_right)
-              neighborInfo = {
-                up: false,
-                down: false,
-                left: n_left,
-                right: n_right,
-              };
-            else
-              neighborInfo = {
-                up: false,
-                down: false,
-                left: false,
-                right: false,
-              };
+          } else if (cellType === "road_straight_vertical") {
+            neighborInfo = {
+              up: getIsVerticalRoad(rowIndex - 1, colIndex) || getIsIntersection(rowIndex - 1, colIndex),
+              down: getIsVerticalRoad(rowIndex + 1, colIndex) || getIsIntersection(rowIndex + 1, colIndex),
+              left: false,
+              right: false,
+            };
+          } else if (cellType === "road_straight_horizontal") {
+            neighborInfo = {
+              up: false,
+              down: false,
+              left: getIsHorizontalRoad(rowIndex, colIndex - 1) || getIsIntersection(rowIndex, colIndex - 1),
+              right: getIsHorizontalRoad(rowIndex, colIndex + 1) || getIsIntersection(rowIndex, colIndex + 1),
+            };
           }
 
           return (
@@ -491,92 +455,80 @@ const PaletteItem = ({ item, isSelected, onClick }) => {
   );
 };
 
-// --- Main App Component ---
 export default function App() {
   const [rows, setRows] = useState(16);
   const [cols, setCols] = useState(25);
-  const [grid, setGrid] = useState(() => createEmptyGrid(rows, cols));
+  const [history, setHistory] = useState([createEmptyGrid(16, 25)]);
+  const [step, setStep] = useState(0);
+  const grid = history[step];
   const [selectedTool, setSelectedTool] = useState("select");
   const [isMouseDown, setIsMouseDown] = useState(false);
   const [paletteMode, setPaletteMode] = useState("main");
 
-  // --- NEW: Simulation State ---
   const [isPlaying, setIsPlaying] = useState(false);
+  const [prePlayStep, setPrePlayStep] = useState(null);
 
-  // Helper to get a cell safely
   const getCell = (g, r, c) => {
     if (r < 0 || r >= g.length || c < 0 || c >= g[0].length) return null;
     return g[r][c];
   };
 
-  // --- NEW: Simulation Tick Logic ---
   useEffect(() => {
     if (!isPlaying) return;
-
     const interval = setInterval(() => {
-      setGrid((prevGrid) => {
-        // 1. Create a deep copy for the next frame
-        // We must map carefully to preserve object references where they don't change
-        const newGrid = prevGrid.map((row) =>
+      setHistory((prev) => {
+        const current = prev[step];
+        const newGrid = current.map((row) =>
           row.map((cell) => (cell ? { ...cell } : null))
         );
-
-        // Track which cars have already moved this tick to prevent double movement
         const movedCars = new Set();
 
         for (let r = 0; r < rows; r++) {
           for (let c = 0; c < cols; c++) {
-            const cell = prevGrid[r][c];
-
-            // If cell has a car and we haven't moved it yet
+            const cell = current[r][c];
             if (cell && cell.hasCar && !movedCars.has(`${r},${c}`)) {
               const direction = cell.hasCar;
               let nextR = r;
               let nextC = c;
               let nextDir = direction;
 
-              // Calculate target cell based on current direction
               if (direction === "up") nextR--;
               if (direction === "down") nextR++;
               if (direction === "left") nextC--;
               if (direction === "right") nextC++;
 
-              const targetCell = getCell(prevGrid, nextR, nextC); // Look at PREV grid state for collision logic
+              const targetCell = getCell(current, nextR, nextC);
 
-              // --- MOVEMENT LOGIC ---
               let canMove = false;
 
-              // 1. Check for Traffic Light
               if (targetCell && targetCell.type === "traffic_light") {
-                // Stop! (Don't set canMove to true)
-              }
-              // 2. Check if target is a drivable road and has NO car
-              else if (
+                // Stop!
+              } else if (
                 targetCell &&
-                (targetCell.type === "road_straight" ||
-                  targetCell.type === "road_intersection") &&
-                !targetCell.hasCar // Simple collision avoidance
+                (
+                  targetCell.type === "road_straight_vertical" ||
+                  targetCell.type === "road_straight_horizontal" ||
+                  targetCell.type === "road_intersection"
+                ) &&
+                !targetCell.hasCar
               ) {
                 canMove = true;
-              }
-              // 3. Cornering / Hit a Wall
-              else {
-                // We are blocked (end of road, not a road, or boundary).
-                // Try to turn.
-                // Determine valid turns based on current direction
+              } else {
                 const possibleTurns = [];
                 const checkTurn = (dr, dc, dir) => {
-                  const t = getCell(prevGrid, r + dr, c + dc);
+                  const t = getCell(current, r + dr, c + dc);
                   if (
                     t &&
-                    (t.type === "road_straight" ||
-                      t.type === "road_intersection") &&
+                    (
+                      t.type === "road_straight_vertical" ||
+                      t.type === "road_straight_horizontal" ||
+                      t.type === "road_intersection"
+                    ) &&
                     !t.hasCar
                   ) {
                     possibleTurns.push(dir);
                   }
                 };
-
                 if (direction === "up" || direction === "down") {
                   checkTurn(0, -1, "left");
                   checkTurn(0, 1, "right");
@@ -584,16 +536,13 @@ export default function App() {
                   checkTurn(-1, 0, "up");
                   checkTurn(1, 0, "down");
                 }
-
                 if (possibleTurns.length > 0) {
-                  // Pick random valid turn
                   nextDir =
                     possibleTurns[
                       Math.floor(Math.random() * possibleTurns.length)
                     ];
-                  // Update next coords
                   nextR = r;
-                  nextC = c; // Reset
+                  nextC = c;
                   if (nextDir === "up") nextR--;
                   if (nextDir === "down") nextR++;
                   if (nextDir === "left") nextC--;
@@ -602,48 +551,40 @@ export default function App() {
                 }
               }
 
-              // --- APPLY MOVE ---
               if (canMove) {
-                // Remove car from current cell in NEW grid
                 if (newGrid[r][c]) {
                   newGrid[r][c].hasCar = false;
-                  // If it was purely a car (no terrain), make it null (unlikely with new logic but safe)
                   if (!newGrid[r][c].type) newGrid[r][c] = null;
                 }
-
-                // Add car to new cell in NEW grid
-                // Ensure target exists in newGrid (it might be null if we painted on null)
-                if (!newGrid[nextR][nextC]) {
-                  // Should not happen if we only move on roads, but safety first
+                if (!newGrid[nextR] || !newGrid[nextR][nextC]) {
                   newGrid[nextR][nextC] = {
-                    type: "road_straight",
+                    type: "road_intersection",
                     hasCar: nextDir,
                   };
                 } else {
                   newGrid[nextR][nextC].hasCar = nextDir;
                 }
-
-                movedCars.add(`${nextR},${nextC}`); // Mark as moved so we don't process it again this loop
+                movedCars.add(`${nextR},${nextC}`);
               } else {
-                // Car stays put. Update rotation if it changed (e.g. tried to turn but blocked)
                 if (newGrid[r][c]) newGrid[r][c].hasCar = nextDir;
               }
             }
           }
         }
-        return newGrid;
+        return [...prev.slice(0, step + 1), newGrid];
       });
-    }, 500); // Tick speed
+      setStep((s) => s + 1);
+    }, 500);
 
     return () => clearInterval(interval);
-  }, [isPlaying, rows, cols]);
+  }, [isPlaying, step, rows, cols]);
 
   const updateGrid = useCallback((row, col, newItemOrType) => {
-    setGrid((prevGrid) => {
-      const newGrid = prevGrid.map((r) => [...r]);
+    setHistory((prev) => {
+      const current = prev[step];
+      const newGrid = current.map((r) => r.map((cell) => (cell ? { ...cell } : null)));
       const currentCell = newGrid[row][col] || { type: null, hasCar: false };
       let updatedCell = { ...currentCell };
-
       if (newItemOrType === null || newItemOrType === "eraser") {
         if (updatedCell.hasCar) {
           updatedCell.hasCar = false;
@@ -652,18 +593,16 @@ export default function App() {
           updatedCell = null;
         }
       } else if (newItemOrType === "car") {
-        // Default new cars to facing RIGHT, or infer from road?
-        // Let's default to "right". Logic will fix it on hit wall.
         updatedCell.hasCar = "right";
       } else {
         updatedCell.type = newItemOrType;
       }
       newGrid[row][col] = updatedCell;
-      return newGrid;
+      return [...prev.slice(0, step + 1), newGrid];
     });
-  }, []);
+    setStep((s) => s + 1);
+  }, [step]);
 
-  // Handlers (Drop, Paint, etc)
   const handleDrop = useCallback(
     (r, c, t) => {
       if (t && t !== "select" && t !== "back" && t !== "road_menu")
@@ -691,7 +630,11 @@ export default function App() {
     if (isNaN(newRows) || newRows <= 0) return;
     setRows(newRows);
     setCols(newCols);
-    setGrid(createEmptyGrid(newRows, newCols));
+    setHistory((prev) => [
+      ...prev.slice(0, step + 1),
+      createEmptyGrid(newRows, newCols),
+    ]);
+    setStep((s) => s + 1);
   };
 
   const currentPaletteItems =
@@ -702,13 +645,15 @@ export default function App() {
       <div className="w-64 bg-white shadow-lg p-6 flex flex-col">
         <h1 className="text-2xl font-bold text-gray-800 mb-6">City Builder</h1>
 
-        {/* Controls */}
         <div className="mb-6 p-4 bg-gray-100 rounded-xl border border-gray-200">
           <h3 className="text-sm font-bold text-gray-500 uppercase mb-2 tracking-wider">
             Simulation
           </h3>
           <button
-            onClick={() => setIsPlaying(!isPlaying)}
+            onClick={() => {
+              if (!isPlaying) setPrePlayStep(step);
+              setIsPlaying(!isPlaying);
+            }}
             className={`w-full py-3 rounded-lg font-bold text-white shadow-sm transition-all transform active:scale-95 ${
               isPlaying
                 ? "bg-orange-500 hover:bg-orange-600"
@@ -716,6 +661,15 @@ export default function App() {
             }`}
           >
             {isPlaying ? "⏸ Pause Traffic" : "▶ Start Traffic"}
+          </button>
+          <button
+            onClick={() => {
+              if (prePlayStep !== null) setStep(prePlayStep);
+            }}
+            className="w-full mt-2 py-3 rounded-lg font-bold text-white bg-blue-500 hover:bg-blue-600 shadow-sm transition-all active:scale-95"
+            disabled={prePlayStep === null}
+          >
+            🔄 Restart Traffic
           </button>
           <p className="text-xs text-gray-500 mt-2 text-center">
             {isPlaying ? "Cars are moving..." : "Place cars then click Start"}
@@ -775,7 +729,13 @@ export default function App() {
         </div>
 
         <button
-          onClick={() => setGrid(createEmptyGrid(rows, cols))}
+          onClick={() => {
+            setHistory((prev) => [
+              ...prev.slice(0, step + 1),
+              createEmptyGrid(rows, cols),
+            ]);
+            setStep((s) => s + 1);
+          }}
           className="w-full mt-3 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600"
         >
           Clear Grid
