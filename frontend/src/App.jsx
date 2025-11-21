@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 
 const TOTAL_GRID_WIDTH_PX = 19 * 64;
 const TOTAL_GRID_HEIGHT_PX = 12 * 64;
