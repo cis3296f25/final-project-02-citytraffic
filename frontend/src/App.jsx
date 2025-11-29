@@ -23,15 +23,16 @@ const MenuIcon = () => (
     <line x1="3" y1="18" x2="21" y2="18"></line>
   </svg>
 );
+// X Icon
 const XIcon = () => (
   <svg
     xmlns="http://www.w3.org/2000/svg"
-    width="24"
-    height="24"
+    width="16"
+    height="16"
     viewBox="0 0 24 24"
     fill="none"
     stroke="currentColor"
-    strokeWidth="2"
+    strokeWidth="3"
     strokeLinecap="round"
     strokeLinejoin="round"
   >
@@ -119,6 +120,22 @@ const LoadIcon = () => (
     <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
   </svg>
 );
+const BackArrowIcon = () => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    width="16"
+    height="16"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <line x1="19" y1="12" x2="5" y2="12"></line>
+    <polyline points="12 19 5 12 12 5"></polyline>
+  </svg>
+);
 
 // --- Palettes ---
 const MAIN_PALETTE_ITEMS = [
@@ -135,22 +152,16 @@ const MAIN_PALETTE_ITEMS = [
     color: "from-slate-500 to-slate-400",
   },
   {
+    type: "decoration_menu",
+    label: "Decor",
+    emoji: "🌳",
+    color: "from-green-500 to-emerald-400",
+  },
+  {
     type: "car",
     label: "Car",
     emoji: "🚗",
     color: "from-red-500 to-orange-400",
-  },
-  {
-    type: "building",
-    label: "Building",
-    emoji: "🏢",
-    color: "from-indigo-500 to-purple-500",
-  },
-  {
-    type: "tree",
-    label: "Tree",
-    emoji: "🌳",
-    color: "from-green-500 to-emerald-400",
   },
   {
     type: "traffic_light",
@@ -185,11 +196,20 @@ const ROAD_PALETTE_ITEMS = [
     emoji: "➕",
     color: "from-gray-600 to-gray-500",
   },
+];
+
+const DECORATION_PALETTE_ITEMS = [
   {
-    type: "back",
-    label: "Back",
-    emoji: "↩️",
-    color: "from-slate-600 to-slate-500",
+    type: "building",
+    label: "Building",
+    emoji: "🏢",
+    color: "from-indigo-500 to-purple-500",
+  },
+  {
+    type: "tree",
+    label: "Tree",
+    emoji: "🌳",
+    color: "from-green-500 to-emerald-400",
   },
 ];
 
@@ -279,9 +299,101 @@ const renderTrafficLight = (lightState) => {
   );
 };
 
+const renderDirectionArrow = (direction) => {
+  let content = null;
+  let rot = 0;
+
+  // Straight Arrows
+  if (
+    direction === "up" ||
+    direction === "down" ||
+    direction === "left" ||
+    direction === "right"
+  ) {
+    if (direction === "right") rot = 90;
+    else if (direction === "down") rot = 180;
+    else if (direction === "left") rot = 270;
+    content = (
+      <>
+        <path d="M0 -15 L10 5 L-10 5 Z" fill="white" />
+        <rect x="-4" y="5" width="8" height="15" fill="white" />
+      </>
+    );
+  }
+  // Curved Arrows (L-Shapes)
+  else if (direction && direction.startsWith("turn_")) {
+    const parts = direction.split("_"); // [turn, entry, exit]
+    const entry = parts[1];
+    const exit = parts[2];
+
+    let pathD = "";
+    let headD = "";
+
+    // Drawing paths relative to center (0,0) with translate(50,50)
+    // Standard "Up-Right" turn (from bottom to right)
+    if (entry === "up" && exit === "right") {
+      pathD = "M 0 35 Q 0 0 35 0";
+      headD = "M 35 0 L 25 -5 L 25 5 Z";
+      rot = 0;
+    } else if (entry === "left" && exit === "up") {
+      pathD = "M -35 0 Q 0 0 0 -35";
+      headD = "M 0 -35 L -5 -25 L 5 -25 Z";
+      rot = 0;
+    } else if (entry === "down" && exit === "left") {
+      pathD = "M 0 -35 Q 0 0 -35 0";
+      headD = "M -35 0 L -25 -5 L -25 5 Z";
+      rot = 0;
+    } else if (entry === "right" && exit === "down") {
+      pathD = "M 35 0 Q 0 0 0 35";
+      headD = "M 0 35 L -5 25 L 5 25 Z";
+      rot = 0;
+    } else if (entry === "up" && exit === "left") {
+      pathD = "M 0 35 Q 0 0 -35 0";
+      headD = "M -35 0 L -25 -5 L -25 5 Z";
+      rot = 0;
+    } else if (entry === "left" && exit === "down") {
+      pathD = "M -35 0 Q 0 0 0 35";
+      headD = "M 0 35 L -5 25 L 5 25 Z";
+      rot = 0;
+    } else if (entry === "down" && exit === "right") {
+      pathD = "M 0 -35 Q 0 0 35 0";
+      headD = "M 35 0 L 25 -5 L 25 5 Z";
+      rot = 0;
+    } else if (entry === "right" && exit === "up") {
+      pathD = "M 35 0 Q 0 0 0 -35";
+      headD = "M 0 -35 L -5 -25 L 5 -25 Z";
+      rot = 0;
+    }
+
+    content = (
+      <>
+        <path
+          d={pathD}
+          fill="none"
+          stroke="white"
+          strokeWidth="8"
+          strokeLinecap="round"
+        />
+        <path d={headD} fill="white" />
+      </>
+    );
+  }
+
+  return (
+    <g
+      transform={`translate(50,50) rotate(${rot})`}
+      opacity="0.9"
+      style={{ pointerEvents: "none" }}
+    >
+      {content}
+    </g>
+  );
+};
+
 const renderCellContent = (cellData, neighborInfo) => {
   const cellType = cellData?.type;
   const carDirection = cellData?.hasCar;
+  const flowDirection = cellData?.flowDirection;
   const content = [];
 
   if (cellType) {
@@ -294,7 +406,8 @@ const renderCellContent = (cellData, neighborInfo) => {
     } else if (!cellType.startsWith("road_")) {
       const item =
         MAIN_PALETTE_ITEMS.find((p) => p.type === cellType) ||
-        ROAD_PALETTE_ITEMS.find((p) => p.type === cellType);
+        ROAD_PALETTE_ITEMS.find((p) => p.type === cellType) ||
+        DECORATION_PALETTE_ITEMS.find((p) => p.type === cellType);
       if (item) {
         content.push(
           <foreignObject key="base" x="0" y="0" width="100" height="100">
@@ -402,6 +515,14 @@ const renderCellContent = (cellData, neighborInfo) => {
             stroke={strokeColor}
             strokeWidth={strokeWidth}
           />
+        );
+      }
+
+      if (flowDirection) {
+        content.push(
+          <React.Fragment key="flow">
+            {renderDirectionArrow(flowDirection)}
+          </React.Fragment>
         );
       }
     }
@@ -602,7 +723,7 @@ const Grid = ({
       onMouseDown={() => setIsMouseDown(true)}
       onMouseUp={() => setIsMouseDown(false)}
       onMouseLeave={() => setIsMouseDown(false)}
-      className="relative bg-slate-100/50 shadow-2xl rounded-sm overflow-hidden"
+      className="relative bg-slate-100/50 shadow-2xl rounded-sm overflow-hidden flex-shrink-0"
       style={{
         userSelect: "none",
         width: `${TOTAL_GRID_WIDTH_PX}px`,
@@ -969,57 +1090,220 @@ export default function App() {
               const targetCell = getCell(newGrid, nextR, nextC);
               let canMove = false;
 
+              // Helper: Check possible moves for normal road logic
+              const getAvailableMoves = (r, c, incomingDir) => {
+                const moves = [];
+                const check = (dr, dc, dir) => {
+                  const t = getCell(newGrid, r + dr, c + dc);
+                  if (
+                    t &&
+                    (t.type.startsWith("road") || t.type === "traffic_light") &&
+                    !t.hasCar
+                  ) {
+                    // Check if t accepts incoming direction
+                    let accepts = true;
+                    if (t.type.startsWith("road")) {
+                      if (t.flowDirection) {
+                        if (t.flowDirection.startsWith("turn_")) {
+                          const entry = t.flowDirection.split("_")[1];
+                          if (dir !== entry) accepts = false;
+                        } else if (t.flowDirection !== dir) {
+                          accepts = false;
+                        }
+                      }
+                    }
+                    if (accepts) moves.push({ r: r + dr, c: c + dc, dir });
+                  }
+                };
+
+                if (incomingDir === "up" || incomingDir === "down") {
+                  check(0, -1, "left");
+                  check(0, 1, "right"); // Turns
+                  if (incomingDir === "up") check(-1, 0, "up"); // Straight
+                  if (incomingDir === "down") check(1, 0, "down");
+                } else {
+                  check(-1, 0, "up");
+                  check(1, 0, "down"); // Turns
+                  if (incomingDir === "left") check(0, -1, "left");
+                  if (incomingDir === "right") check(0, 1, "right");
+                }
+                return moves;
+              };
+
+              // TRAFFIC LIGHT LOGIC
               if (targetCell && targetCell.type === "traffic_light") {
                 const lightState = targetCell.state || "green";
-                if (lightState === "green") canMove = true;
-                else canMove = false;
+
+                if (lightState === "green") {
+                  // GREEN: Calculate logic FROM the light cell to find exit
+                  // Get valid exits from the light
+                  const exits = getAvailableMoves(nextR, nextC, direction);
+                  // Filter out U-turn
+                  const validExits = exits.filter(
+                    (m) => !(m.r === r && m.c === c)
+                  );
+
+                  if (validExits.length > 0) {
+                    const exit =
+                      validExits[Math.floor(Math.random() * validExits.length)];
+                    nextR = exit.r;
+                    nextC = exit.c;
+                    nextDir = exit.dir;
+                    canMove = true;
+                  } else {
+                    canMove = false; // Dead end at light
+                  }
+                } else {
+                  canMove = false; // RED/YELLOW -> Stop
+                }
               } else if (
                 targetCell &&
                 targetCell.type.startsWith("road") &&
                 !targetCell.hasCar
               ) {
-                canMove = true;
+                // Direction Check
+                let flowRestricted = false;
+
+                // If CURRENT cell has a turn, we MUST follow it (Force Move)
+                if (
+                  cell.flowDirection &&
+                  cell.flowDirection.startsWith("turn_")
+                ) {
+                  const parts = cell.flowDirection.split("_");
+                  const exit = parts[2];
+                  if (nextDir !== exit) {
+                    nextDir = exit;
+                    nextR = r;
+                    nextC = c;
+                    if (nextDir === "up") nextR--;
+                    if (nextDir === "down") nextR++;
+                    if (nextDir === "left") nextC--;
+                    if (nextDir === "right") nextC++;
+
+                    const forcedTarget = getCell(newGrid, nextR, nextC);
+                    if (
+                      forcedTarget &&
+                      (forcedTarget.type.startsWith("road") ||
+                        forcedTarget.type === "traffic_light") &&
+                      !forcedTarget.hasCar
+                    ) {
+                      if (forcedTarget.type === "traffic_light") {
+                        const lightState = forcedTarget.state || "green";
+                        if (lightState !== "green") canMove = false;
+                        else canMove = true;
+                      } else {
+                        canMove = true;
+                      }
+                    } else {
+                      canMove = false;
+                    }
+                    flowRestricted = true;
+                  }
+                }
+
+                if (!flowRestricted) {
+                  if (
+                    targetCell.flowDirection &&
+                    targetCell.flowDirection.startsWith("turn_")
+                  ) {
+                    const parts = targetCell.flowDirection.split("_");
+                    const entry = parts[1];
+                    if (direction !== entry) canMove = false;
+                    else canMove = true;
+                  } else if (
+                    targetCell.flowDirection &&
+                    targetCell.flowDirection !== nextDir
+                  ) {
+                    if (targetCell.flowDirection !== nextDir) canMove = false;
+                    else canMove = true;
+                  } else {
+                    canMove = true;
+                  }
+                }
               } else {
                 const possibleTurns = [];
+                const currentFlow = cell.flowDirection;
+
                 const checkTurn = (dr, dc, dir) => {
+                  if (currentFlow && currentFlow !== dir) return;
+
                   const t = getCell(newGrid, r + dr, c + dc);
-                  if (t && t.type.startsWith("road") && !t.hasCar)
-                    possibleTurns.push(dir);
+                  if (t && t.type.startsWith("road") && !t.hasCar) {
+                    if (
+                      t.flowDirection &&
+                      t.flowDirection.startsWith("turn_")
+                    ) {
+                      const parts = t.flowDirection.split("_");
+                      if (dir === parts[1]) possibleTurns.push(dir);
+                    } else if (!t.flowDirection || t.flowDirection === dir) {
+                      possibleTurns.push(dir);
+                    }
+                  }
                 };
-                if (direction === "up" || direction === "down") {
-                  checkTurn(0, -1, "left");
-                  checkTurn(0, 1, "right");
-                } else {
-                  checkTurn(-1, 0, "up");
-                  checkTurn(1, 0, "down");
+
+                if (cell.flowDirection) {
+                  let dr = 0,
+                    dc = 0;
+                  if (cell.flowDirection === "up") dr = -1;
+                  if (cell.flowDirection === "down") dr = 1;
+                  if (cell.flowDirection === "left") dc = -1;
+                  if (cell.flowDirection === "right") dc = 1;
+
+                  if (!cell.flowDirection.startsWith("turn_")) {
+                    const t = getCell(newGrid, r + dr, c + dc);
+                    if (t && t.type.startsWith("road") && !t.hasCar) {
+                      if (
+                        !t.flowDirection ||
+                        t.flowDirection === cell.flowDirection
+                      ) {
+                        nextDir = cell.flowDirection;
+                        nextR = r + dr;
+                        nextC = c + dc;
+                        canMove = true;
+                      }
+                    }
+                  }
                 }
-                if (possibleTurns.length > 0) {
-                  nextDir =
-                    possibleTurns[
-                      Math.floor(Math.random() * possibleTurns.length)
-                    ];
-                  nextR = r;
-                  nextC = c;
-                  if (nextDir === "up") nextR--;
-                  if (nextDir === "down") nextR++;
-                  if (nextDir === "left") nextC--;
-                  if (nextDir === "right") nextC++;
-                  canMove = true;
+
+                if (!canMove) {
+                  if (direction === "up" || direction === "down") {
+                    checkTurn(0, -1, "left");
+                    checkTurn(0, 1, "right");
+                  } else {
+                    checkTurn(-1, 0, "up");
+                    checkTurn(1, 0, "down");
+                  }
+
+                  if (possibleTurns.length > 0) {
+                    nextDir =
+                      possibleTurns[
+                        Math.floor(Math.random() * possibleTurns.length)
+                      ];
+                    nextR = r;
+                    nextC = c;
+                    if (nextDir === "up") nextR--;
+                    if (nextDir === "down") nextR++;
+                    if (nextDir === "left") nextC--;
+                    if (nextDir === "right") nextC++;
+                    canMove = true;
+                  }
                 }
               }
 
               if (canMove) {
                 cell.hasCar = false;
                 if (!cell.type) newGrid[r][c] = null;
-                if (!newGrid[nextR][nextC]) {
-                  newGrid[nextR][nextC] = {
-                    type: "road_straight_horizontal",
-                    hasCar: nextDir,
-                  };
-                } else {
-                  newGrid[nextR][nextC].hasCar = nextDir;
+                if (newGrid[nextR] && newGrid[nextR][nextC] !== undefined) {
+                  if (!newGrid[nextR][nextC]) {
+                    newGrid[nextR][nextC] = {
+                      type: "road_straight_horizontal",
+                      hasCar: nextDir,
+                    };
+                  } else {
+                    newGrid[nextR][nextC].hasCar = nextDir;
+                  }
+                  movedCars.add(`${nextR},${nextC}`);
                 }
-                movedCars.add(`${nextR},${nextC}`);
               } else {
                 cell.hasCar = nextDir;
               }
@@ -1088,6 +1372,113 @@ export default function App() {
     setStep((s) => s + 1);
   };
 
+  const updateRoadFlow = (row, col, direction) => {
+    setHistory((prev) => {
+      const current = prev[step];
+      const newGrid = current.map((r) =>
+        r.map((cell) => (cell ? { ...cell } : null))
+      );
+      if (newGrid[row][col] && newGrid[row][col].type.startsWith("road")) {
+        newGrid[row][col].flowDirection = direction;
+      }
+      return [...prev.slice(0, step + 1), newGrid];
+    });
+    setStep((s) => s + 1);
+  };
+
+  // SMART DIRECTIONAL FLOOD FILL
+  const floodFillFlow = (row, col, direction) => {
+    setHistory((prev) => {
+      const current = prev[step];
+      const newGrid = current.map((r) =>
+        r.map((cell) => (cell ? { ...cell } : null))
+      );
+      const startCell = newGrid[row][col];
+      if (!startCell || !startCell.type.startsWith("road")) return prev;
+
+      let initialPropDir = direction;
+      if (direction && direction.startsWith("turn_")) {
+        initialPropDir = direction.split("_")[2];
+      }
+
+      const queue = [[row, col, initialPropDir]];
+      const visited = new Set();
+
+      while (queue.length > 0) {
+        let [r, c, currDir] = queue.shift(); // CHANGED const to let
+        const key = `${r},${c}`;
+
+        if (visited.has(key)) continue;
+        visited.add(key);
+
+        if (newGrid[r][c] && newGrid[r][c].type.startsWith("road")) {
+          if (r !== row || c !== col) {
+            const cellType = newGrid[r][c].type;
+            let newFlow = currDir;
+            let nextPropDir = currDir;
+
+            if (
+              cellType === "road_straight_horizontal" &&
+              (currDir === "up" || currDir === "down")
+            ) {
+              const leftN = getCell(newGrid, r, c - 1);
+              const rightN = getCell(newGrid, r, c + 1);
+
+              if (leftN && leftN.type.startsWith("road")) {
+                nextPropDir = "left";
+                newFlow = `turn_${currDir}_left`;
+              } else if (rightN && rightN.type.startsWith("road")) {
+                nextPropDir = "right";
+                newFlow = `turn_${currDir}_right`;
+              }
+            } else if (
+              cellType === "road_straight_vertical" &&
+              (currDir === "left" || currDir === "right")
+            ) {
+              const upN = getCell(newGrid, r - 1, c);
+              const downN = getCell(newGrid, r + 1, c);
+
+              if (upN && upN.type.startsWith("road")) {
+                nextPropDir = "up";
+                newFlow = `turn_${currDir}_up`;
+              } else if (downN && downN.type.startsWith("road")) {
+                nextPropDir = "down";
+                newFlow = `turn_${currDir}_down`;
+              }
+            }
+
+            newGrid[r][c].flowDirection = newFlow;
+            currDir = nextPropDir;
+          }
+
+          let dr = 0,
+            dc = 0;
+          if (currDir === "up") dr = -1;
+          if (currDir === "down") dr = 1;
+          if (currDir === "left") dc = -1;
+          if (currDir === "right") dc = 1;
+
+          if (dr !== 0 || dc !== 0) {
+            const nr = r + dr,
+              nc = c + dc;
+            if (
+              nr >= 0 &&
+              nr < rows &&
+              nc >= 0 &&
+              nc < cols &&
+              newGrid[nr][nc] &&
+              newGrid[nr][nc].type.startsWith("road")
+            ) {
+              queue.push([nr, nc, currDir]);
+            }
+          }
+        }
+      }
+      return [...prev.slice(0, step + 1), newGrid];
+    });
+    setStep((s) => s + 1);
+  };
+
   const handleCellAction = (r, c) => {
     if (selectedTool === "select") {
       setSelectedCell({ row: r, col: c });
@@ -1106,14 +1497,17 @@ export default function App() {
     setPrePlayStep(null);
   };
 
-  const currentPaletteItems =
-    paletteMode === "road" ? ROAD_PALETTE_ITEMS : MAIN_PALETTE_ITEMS;
+  let currentPaletteItems = MAIN_PALETTE_ITEMS;
+  if (paletteMode === "road") currentPaletteItems = ROAD_PALETTE_ITEMS;
+  if (paletteMode === "decoration")
+    currentPaletteItems = DECORATION_PALETTE_ITEMS;
+
   const selectedCellData = selectedCell
     ? grid[selectedCell.row] && grid[selectedCell.row][selectedCell.col]
     : null;
 
   return (
-    <div className="flex h-screen bg-slate-950 font-sans text-slate-200 overflow-hidden">
+    <div className="flex h-screen w-screen bg-slate-950 font-sans text-slate-200 overflow-hidden">
       {/* --- Modal Overlay --- */}
       {activeModal && (
         <SaveLoadModal
@@ -1145,14 +1539,13 @@ export default function App() {
         />
       )}
 
-      {/* Sidebar - FIXED LAYOUT: Now using flex-shrink-0 and width animation */}
+      {/* Sidebar - NARROWER WIDTH (w-64) */}
       <div
         className={`flex-shrink-0 h-full bg-slate-900/95 backdrop-blur-md shadow-2xl z-40 overflow-hidden transition-[width] duration-300 ease-in-out border-r border-slate-800 flex flex-col ${
-          isSidebarOpen ? "w-80" : "w-0 border-none"
+          isSidebarOpen ? "w-64" : "w-0 border-none"
         }`}
       >
-        {/* Inner Container: Fixed width to prevent content squishing during animation */}
-        <div className="w-80 h-full flex flex-col">
+        <div className="w-64 h-full flex flex-col">
           <div className="p-6 border-b border-slate-800 bg-gradient-to-r from-slate-900 to-slate-800 flex justify-between items-center">
             <div className="flex items-center gap-3">
               <div className="w-8 h-8 rounded bg-gradient-to-br from-blue-500 to-cyan-400 flex items-center justify-center text-lg shadow-lg shadow-blue-500/30">
@@ -1162,160 +1555,423 @@ export default function App() {
                 CityBuilder<span className="text-blue-400 font-light">Pro</span>
               </h1>
             </div>
+            {/* CENTERED X BUTTON: Red background, white icon, z-50, centered flex */}
             <button
               onClick={() => setIsSidebarOpen(false)}
-              className="text-slate-400 hover:text-white"
+              className="w-8 h-8 flex items-center justify-center bg-red-500 hover:bg-red-600 text-white rounded-full transition-colors shadow-md ml-2 z-50"
             >
               <XIcon />
             </button>
           </div>
 
           <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
-            {/* Properties Panel */}
+            {/* Properties Panel: Traffic Light */}
             {selectedCell &&
-            selectedCellData &&
-            selectedCellData.type === "traffic_light" ? (
-              <div className="mb-6 p-4 bg-slate-800 rounded-xl border-l-4 border-blue-500 shadow-md animate-fadeIn">
-                <div className="flex justify-between items-center mb-3">
-                  <h2 className="text-sm font-bold text-white uppercase tracking-wider">
-                    🚦 Signal Config
-                  </h2>
-                  <button
-                    onClick={() => setSelectedCell(null)}
-                    className="text-xs text-slate-400 hover:text-white"
-                  >
-                    Close
-                  </button>
-                </div>
-                <div className="space-y-3">
-                  <p className="text-[10px] text-slate-400">
-                    Position: {selectedCell.row}, {selectedCell.col}
-                  </p>
-
-                  <div className="grid grid-cols-3 gap-2">
-                    <div>
-                      <label className="text-[10px] text-green-400 block mb-1">
-                        Green
-                      </label>
-                      <input
-                        type="number"
-                        min="1"
-                        value={selectedCellData.config?.green || 10}
-                        onChange={(e) =>
-                          updateTrafficLightConfig(
-                            selectedCell.row,
-                            selectedCell.col,
-                            "green",
-                            e.target.value
-                          )
-                        }
-                        className="w-full bg-slate-900 border border-slate-600 rounded p-1 text-xs text-center text-white"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-[10px] text-yellow-400 block mb-1">
-                        Yellow
-                      </label>
-                      <input
-                        type="number"
-                        min="1"
-                        value={selectedCellData.config?.yellow || 4}
-                        onChange={(e) =>
-                          updateTrafficLightConfig(
-                            selectedCell.row,
-                            selectedCell.col,
-                            "yellow",
-                            e.target.value
-                          )
-                        }
-                        className="w-full bg-slate-900 border border-slate-600 rounded p-1 text-xs text-center text-white"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-[10px] text-red-400 block mb-1">
-                        Red
-                      </label>
-                      <input
-                        type="number"
-                        min="1"
-                        value={selectedCellData.config?.red || 10}
-                        onChange={(e) =>
-                          updateTrafficLightConfig(
-                            selectedCell.row,
-                            selectedCell.col,
-                            "red",
-                            e.target.value
-                          )
-                        }
-                        className="w-full bg-slate-900 border border-slate-600 rounded p-1 text-xs text-center text-white"
-                      />
-                    </div>
-                  </div>
-                  <div className="bg-slate-900 p-2 rounded flex justify-between items-center">
-                    <span className="text-xs text-slate-500">
-                      Current State:
-                    </span>
-                    <span
-                      className={`text-xs font-bold px-2 py-0.5 rounded ${
-                        selectedCellData.state === "green"
-                          ? "bg-green-900 text-green-400"
-                          : selectedCellData.state === "yellow"
-                          ? "bg-yellow-900 text-yellow-400"
-                          : "bg-red-900 text-red-400"
-                      }`}
+              selectedCellData &&
+              selectedCellData.type === "traffic_light" && (
+                <div className="mb-6 p-4 bg-slate-800 rounded-xl border-l-4 border-blue-500 shadow-md animate-fadeIn">
+                  <div className="flex justify-between items-center mb-3">
+                    <h2 className="text-sm font-bold text-white uppercase tracking-wider">
+                      🚦 Signal Config
+                    </h2>
+                    <button
+                      onClick={() => setSelectedCell(null)}
+                      className="text-xs text-slate-400 hover:text-white"
                     >
-                      {(selectedCellData.state || "GREEN").toUpperCase()} (
-                      {selectedCellData.timer || 0})
-                    </span>
+                      Close
+                    </button>
+                  </div>
+                  <div className="space-y-3">
+                    <p className="text-[10px] text-slate-400">
+                      Position: {selectedCell.row}, {selectedCell.col}
+                    </p>
+
+                    <div className="grid grid-cols-3 gap-2">
+                      <div>
+                        <label className="text-[10px] text-green-400 block mb-1">
+                          Green
+                        </label>
+                        <input
+                          type="number"
+                          min="1"
+                          value={selectedCellData.config?.green || 10}
+                          onChange={(e) =>
+                            updateTrafficLightConfig(
+                              selectedCell.row,
+                              selectedCell.col,
+                              "green",
+                              e.target.value
+                            )
+                          }
+                          className="w-full bg-slate-900 border border-slate-600 rounded p-1 text-xs text-center text-white"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-yellow-400 block mb-1">
+                          Yellow
+                        </label>
+                        <input
+                          type="number"
+                          min="1"
+                          value={selectedCellData.config?.yellow || 4}
+                          onChange={(e) =>
+                            updateTrafficLightConfig(
+                              selectedCell.row,
+                              selectedCell.col,
+                              "yellow",
+                              e.target.value
+                            )
+                          }
+                          className="w-full bg-slate-900 border border-slate-600 rounded p-1 text-xs text-center text-white"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-red-400 block mb-1">
+                          Red
+                        </label>
+                        <input
+                          type="number"
+                          min="1"
+                          value={selectedCellData.config?.red || 10}
+                          onChange={(e) =>
+                            updateTrafficLightConfig(
+                              selectedCell.row,
+                              selectedCell.col,
+                              "red",
+                              e.target.value
+                            )
+                          }
+                          className="w-full bg-slate-900 border border-slate-600 rounded p-1 text-xs text-center text-white"
+                        />
+                      </div>
+                    </div>
+                    <div className="bg-slate-900 p-2 rounded flex justify-between items-center">
+                      <span className="text-xs text-slate-500">
+                        Current State:
+                      </span>
+                      <span
+                        className={`text-xs font-bold px-2 py-0.5 rounded ${
+                          selectedCellData.state === "green"
+                            ? "bg-green-900 text-green-400"
+                            : selectedCellData.state === "yellow"
+                            ? "bg-yellow-900 text-yellow-400"
+                            : "bg-red-900 text-red-400"
+                        }`}
+                      >
+                        {(selectedCellData.state || "GREEN").toUpperCase()} (
+                        {selectedCellData.timer || 0})
+                      </span>
+                    </div>
                   </div>
                 </div>
-              </div>
-            ) : selectedCell ? (
-              <div className="mb-6 p-4 bg-slate-800 rounded-xl border border-slate-700">
-                <div className="flex justify-between items-center">
-                  <h2 className="text-xs font-bold text-slate-500 uppercase">
-                    Selected Cell
-                  </h2>
-                  <button
-                    onClick={() => setSelectedCell(null)}
-                    className="text-xs text-slate-400 hover:text-white"
-                  >
-                    ✕
-                  </button>
+              )}
+
+            {/* Properties Panel: Road Flow Control */}
+            {selectedCell &&
+              selectedCellData &&
+              selectedCellData.type.startsWith("road") && (
+                <div className="mb-6 p-4 bg-slate-800 rounded-xl border-l-4 border-emerald-500 shadow-md animate-fadeIn">
+                  <div className="flex justify-between items-center mb-3">
+                    <h2 className="text-sm font-bold text-white uppercase tracking-wider">
+                      🛣️ Traffic Flow
+                    </h2>
+                    <button
+                      onClick={() => setSelectedCell(null)}
+                      className="text-xs text-slate-400 hover:text-white"
+                    >
+                      Close
+                    </button>
+                  </div>
+                  <div className="space-y-3">
+                    {/* Straight Flows */}
+                    <div className="grid grid-cols-5 gap-1 mb-2">
+                      <button
+                        onClick={() =>
+                          updateRoadFlow(
+                            selectedCell.row,
+                            selectedCell.col,
+                            null
+                          )
+                        }
+                        className={`p-1 rounded text-[10px] border ${
+                          !selectedCellData.flowDirection
+                            ? "bg-emerald-600"
+                            : "bg-slate-700"
+                        }`}
+                      >
+                        Any
+                      </button>
+                      <button
+                        onClick={() =>
+                          updateRoadFlow(
+                            selectedCell.row,
+                            selectedCell.col,
+                            "up"
+                          )
+                        }
+                        className={`p-1 rounded text-lg border ${
+                          selectedCellData.flowDirection === "up"
+                            ? "bg-emerald-600"
+                            : "bg-slate-700"
+                        }`}
+                      >
+                        ⬆️
+                      </button>
+                      <button
+                        onClick={() =>
+                          updateRoadFlow(
+                            selectedCell.row,
+                            selectedCell.col,
+                            "down"
+                          )
+                        }
+                        className={`p-1 rounded text-lg border ${
+                          selectedCellData.flowDirection === "down"
+                            ? "bg-emerald-600"
+                            : "bg-slate-700"
+                        }`}
+                      >
+                        ⬇️
+                      </button>
+                      <button
+                        onClick={() =>
+                          updateRoadFlow(
+                            selectedCell.row,
+                            selectedCell.col,
+                            "left"
+                          )
+                        }
+                        className={`p-1 rounded text-lg border ${
+                          selectedCellData.flowDirection === "left"
+                            ? "bg-emerald-600"
+                            : "bg-slate-700"
+                        }`}
+                      >
+                        ⬅️
+                      </button>
+                      <button
+                        onClick={() =>
+                          updateRoadFlow(
+                            selectedCell.row,
+                            selectedCell.col,
+                            "right"
+                          )
+                        }
+                        className={`p-1 rounded text-lg border ${
+                          selectedCellData.flowDirection === "right"
+                            ? "bg-emerald-600"
+                            : "bg-slate-700"
+                        }`}
+                      >
+                        ➡️
+                      </button>
+                    </div>
+
+                    {/* Turn Flows - L Shapes */}
+                    <div className="text-[10px] text-slate-500 uppercase tracking-wider font-bold mt-2">
+                      Right Turns
+                    </div>
+                    <div className="grid grid-cols-4 gap-1">
+                      <button
+                        onClick={() =>
+                          updateRoadFlow(
+                            selectedCell.row,
+                            selectedCell.col,
+                            "turn_up_right"
+                          )
+                        }
+                        className={`p-1 rounded text-lg border ${
+                          selectedCellData.flowDirection === "turn_up_right"
+                            ? "bg-emerald-600"
+                            : "bg-slate-700"
+                        }`}
+                      >
+                        ⤴️
+                      </button>
+                      <button
+                        onClick={() =>
+                          updateRoadFlow(
+                            selectedCell.row,
+                            selectedCell.col,
+                            "turn_right_down"
+                          )
+                        }
+                        className={`p-1 rounded text-lg border ${
+                          selectedCellData.flowDirection === "turn_right_down"
+                            ? "bg-emerald-600"
+                            : "bg-slate-700"
+                        }`}
+                      >
+                        ⤵️
+                      </button>
+                      <button
+                        onClick={() =>
+                          updateRoadFlow(
+                            selectedCell.row,
+                            selectedCell.col,
+                            "turn_down_left"
+                          )
+                        }
+                        className={`p-1 rounded text-lg border ${
+                          selectedCellData.flowDirection === "turn_down_left"
+                            ? "bg-emerald-600"
+                            : "bg-slate-700"
+                        }`}
+                      >
+                        ↙️
+                      </button>
+                      <button
+                        onClick={() =>
+                          updateRoadFlow(
+                            selectedCell.row,
+                            selectedCell.col,
+                            "turn_left_up"
+                          )
+                        }
+                        className={`p-1 rounded text-lg border ${
+                          selectedCellData.flowDirection === "turn_left_up"
+                            ? "bg-emerald-600"
+                            : "bg-slate-700"
+                        }`}
+                      >
+                        ↖️
+                      </button>
+                    </div>
+
+                    <div className="text-[10px] text-slate-500 uppercase tracking-wider font-bold mt-2">
+                      Left Turns
+                    </div>
+                    <div className="grid grid-cols-4 gap-1">
+                      <button
+                        onClick={() =>
+                          updateRoadFlow(
+                            selectedCell.row,
+                            selectedCell.col,
+                            "turn_up_left"
+                          )
+                        }
+                        className={`p-1 rounded text-lg border ${
+                          selectedCellData.flowDirection === "turn_up_left"
+                            ? "bg-emerald-600"
+                            : "bg-slate-700"
+                        }`}
+                      >
+                        ↖️
+                      </button>
+                      <button
+                        onClick={() =>
+                          updateRoadFlow(
+                            selectedCell.row,
+                            selectedCell.col,
+                            "turn_left_down"
+                          )
+                        }
+                        className={`p-1 rounded text-lg border ${
+                          selectedCellData.flowDirection === "turn_left_down"
+                            ? "bg-emerald-600"
+                            : "bg-slate-700"
+                        }`}
+                      >
+                        ↙️
+                      </button>
+                      <button
+                        onClick={() =>
+                          updateRoadFlow(
+                            selectedCell.row,
+                            selectedCell.col,
+                            "turn_down_right"
+                          )
+                        }
+                        className={`p-1 rounded text-lg border ${
+                          selectedCellData.flowDirection === "turn_down_right"
+                            ? "bg-emerald-600"
+                            : "bg-slate-700"
+                        }`}
+                      >
+                        ⤵️
+                      </button>
+                      <button
+                        onClick={() =>
+                          updateRoadFlow(
+                            selectedCell.row,
+                            selectedCell.col,
+                            "turn_right_up"
+                          )
+                        }
+                        className={`p-1 rounded text-lg border ${
+                          selectedCellData.flowDirection === "turn_right_up"
+                            ? "bg-emerald-600"
+                            : "bg-slate-700"
+                        }`}
+                      >
+                        ⤴️
+                      </button>
+                    </div>
+
+                    <div className="pt-2 border-t border-slate-700 mt-2">
+                      <button
+                        onClick={() =>
+                          floodFillFlow(
+                            selectedCell.row,
+                            selectedCell.col,
+                            selectedCellData.flowDirection
+                          )
+                        }
+                        className="w-full py-1.5 bg-slate-700 hover:bg-slate-600 text-xs text-slate-300 rounded transition-colors"
+                      >
+                        Apply to Connected
+                      </button>
+                    </div>
+                  </div>
                 </div>
-                <div className="mt-2 text-sm text-slate-300">
-                  {selectedCellData ? (
-                    <>
-                      Type:{" "}
-                      <span className="text-blue-400 font-mono">
-                        {selectedCellData.type}
-                      </span>
-                      {selectedCellData.hasCar && (
-                        <div className="mt-1 text-xs text-orange-400">
-                          Contains Car
-                        </div>
-                      )}
-                    </>
-                  ) : (
-                    <span className="text-slate-500 italic">Empty Cell</span>
-                  )}
+              )}
+
+            {/* Standard Selected Cell Info (Fallback) */}
+            {selectedCell &&
+              selectedCellData &&
+              !selectedCellData.type.startsWith("road") &&
+              selectedCellData.type !== "traffic_light" && (
+                <div className="mb-6 p-4 bg-slate-800 rounded-xl border border-slate-700">
+                  <div className="flex justify-between items-center">
+                    <h2 className="text-xs font-bold text-slate-500 uppercase">
+                      Selected Cell
+                    </h2>
+                    <button
+                      onClick={() => setSelectedCell(null)}
+                      className="text-xs text-slate-400 hover:text-white"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                  <div className="mt-2 text-sm text-slate-300">
+                    Type:{" "}
+                    <span className="text-blue-400 font-mono">
+                      {selectedCellData.type}
+                    </span>
+                    {selectedCellData.hasCar && (
+                      <div className="mt-1 text-xs text-orange-400">
+                        Contains Car
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
-            ) : (
+              )}
+
+            {!selectedCell && (
               <div className="mb-6 p-4 border border-dashed border-slate-700 rounded-xl text-center">
                 <p className="text-xs text-slate-500">
-                  Select a Traffic Light with{" "}
-                  <span className="text-lg">👆</span> to edit its timing.
+                  Select a Road or Signal with{" "}
+                  <span className="text-lg">👆</span> to edit.
                 </p>
               </div>
             )}
 
-            {/* Tools Palette */}
+            {/* Tools Palette - 2 COLUMNS */}
             <div className="mb-8">
               <h2 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3 ml-1">
                 Tools & Objects
               </h2>
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-2 gap-3">
                 {currentPaletteItems.map((item) => (
                   <PaletteItem
                     key={item.type}
@@ -1325,10 +1981,12 @@ export default function App() {
                       if (item.type === "road_menu") {
                         setPaletteMode("road");
                         setSelectedTool("select");
-                      } else if (item.type === "back") {
-                        setPaletteMode("main");
+                      } else if (item.type === "decoration_menu") {
+                        setPaletteMode("decoration");
                         setSelectedTool("select");
-                      } else {
+                      }
+                      // Removed old "back" logic here since it's now in footer
+                      else {
                         setSelectedTool(item.type);
                       }
                       if (item.type !== "select") setSelectedCell(null);
@@ -1338,10 +1996,26 @@ export default function App() {
               </div>
             </div>
           </div>
+
+          {/* FIXED FOOTER for Back Button */}
+          {paletteMode !== "main" && (
+            <div className="p-4 border-t border-slate-800 bg-slate-900">
+              <button
+                onClick={() => {
+                  setPaletteMode("main");
+                  setSelectedTool("select");
+                }}
+                className="w-full py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg flex items-center justify-center gap-2 transition-colors border border-slate-700"
+              >
+                <BackArrowIcon />
+                <span className="text-sm font-medium">Back to Menu</span>
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Main Stage - FLEX GROW: Automatically fills remaining space */}
+      {/* Main Stage */}
       <div className="flex-1 relative overflow-hidden bg-slate-950 flex flex-col min-w-0">
         {/* Floating Controls Toolbar - Bottom Right */}
         <div className="absolute bottom-8 right-8 z-50 flex items-center gap-2 p-2 bg-slate-900/90 backdrop-blur-md border border-slate-700 rounded-2xl shadow-2xl">
