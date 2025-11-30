@@ -171,7 +171,7 @@ const MAIN_PALETTE_ITEMS = [
   },
   {
     type: "eraser",
-    label: "Clear",
+    label: "Eraser",
     emoji: "🧼",
     color: "from-pink-500 to-rose-400",
   },
@@ -683,8 +683,8 @@ const Grid = ({
             lines.push({
               x1: cx,
               y1: cy,
-              x2: cx - cellWidth,
-              y2: cy,
+              x2: cx, // Fixed: Keep X same for vertical line
+              y2: cy - cellHeight, // Fixed: Move Y up
               key: `v-up-${r}-${c}`,
             });
           if (getIsVerticalRoad(r + 1, c) || getIsIntersection(r + 1, c))
@@ -1555,10 +1555,10 @@ export default function App() {
                 CityBuilder<span className="text-blue-400 font-light">Pro</span>
               </h1>
             </div>
-            {/* CENTERED X BUTTON: Red background, white icon, z-50, centered flex */}
+            {/* CENTERED X BUTTON: Slate background, p-0 to override global padding */}
             <button
               onClick={() => setIsSidebarOpen(false)}
-              className="w-8 h-8 flex items-center justify-center bg-red-500 hover:bg-red-600 text-white rounded-full transition-colors shadow-md ml-2 z-50"
+              className="w-8 h-8 p-0 flex items-center justify-center bg-slate-700 hover:bg-slate-600 border border-slate-500 text-white rounded-full transition-all shadow-md ml-2 -mr-2 z-50"
             >
               <XIcon />
             </button>
