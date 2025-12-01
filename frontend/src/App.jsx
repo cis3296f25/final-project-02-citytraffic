@@ -1,4 +1,13 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
+import { db } from "./firebase"; // Import the DB we just initialized
+import {
+  collection,
+  getDocs,
+  addDoc,
+  updateDoc,
+  deleteDoc,
+  doc,
+} from "firebase/firestore";
 
 // --- Constants ---
 const TOTAL_GRID_WIDTH_PX = 19 * 64;
