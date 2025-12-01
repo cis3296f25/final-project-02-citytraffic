@@ -196,6 +196,19 @@ const ROAD_PALETTE_ITEMS = [
     emoji: "➕",
     color: "from-gray-600 to-gray-500",
   },
+  // --- NEW MULTI-LANE ROADS ---
+  {
+    type: "road_multilane_vertical",
+    label: "2-Lane Vert",
+    emoji: "║",
+    color: "from-slate-600 to-slate-500",
+  },
+  {
+    type: "road_multilane_horizontal",
+    label: "2-Lane Horz",
+    emoji: "═",
+    color: "from-slate-600 to-slate-500",
+  },
 ];
 
 const DECORATION_PALETTE_ITEMS = [
@@ -421,7 +434,77 @@ const renderCellContent = (cellData, neighborInfo) => {
       const strokeColor = "#334155";
       const strokeWidth = 80;
       const center = 50;
-      if (cellType === "road_intersection") {
+
+      // --- MULTI-LANE RENDERING ---
+      if (cellType === "road_multilane_vertical") {
+        const isRightLane = cellData.lanePosition === 1; // 0 = Left (Primary), 1 = Right (Secondary)
+
+        // Background Road (Gray)
+        content.push(
+          <line
+            key="bg-road"
+            x1={center}
+            y1={-1}
+            x2={center}
+            y2={101}
+            stroke={strokeColor}
+            strokeWidth={strokeWidth}
+          />
+        );
+
+        // Thicker Dotted White Line
+        // If Primary (Left): Draw on Right Edge (x=100)
+        // If Secondary (Right): Draw on Left Edge (x=0)
+        const lineX = isRightLane ? 0 : 100;
+
+        content.push(
+          <line
+            key="dashed-line"
+            x1={lineX}
+            y1={0}
+            x2={lineX}
+            y2={100}
+            stroke="white"
+            strokeWidth="6"
+            strokeDasharray="12,12"
+          />
+        );
+      } else if (cellType === "road_multilane_horizontal") {
+        const isBottomLane = cellData.lanePosition === 1; // 0 = Top (Primary), 1 = Bottom (Secondary)
+
+        // Background Road
+        content.push(
+          <line
+            key="bg-road"
+            x1={-1}
+            y1={center}
+            x2={101}
+            y2={center}
+            stroke={strokeColor}
+            strokeWidth={strokeWidth}
+          />
+        );
+
+        // Thicker Dotted White Line
+        // If Primary (Top): Draw on Bottom Edge (y=100)
+        // If Secondary (Bottom): Draw on Top Edge (y=0)
+        const lineY = isBottomLane ? 0 : 100;
+
+        content.push(
+          <line
+            key="dashed-line"
+            x1={0}
+            y1={lineY}
+            x2={100}
+            y2={lineY}
+            stroke="white"
+            strokeWidth="6"
+            strokeDasharray="12,12"
+          />
+        );
+      }
+      // --- STANDARD ROADS ---
+      else if (cellType === "road_intersection") {
         const { up, down, left, right } = neighborInfo;
         if (up)
           content.push(
@@ -553,7 +636,7 @@ const GridCell = React.memo(
     col,
     onDrop,
     onPaint,
-    onRightClick, // Added
+    onRightClick,
     cellWidth,
     cellHeight,
     neighborInfo,
@@ -620,14 +703,18 @@ const Grid = ({
     c >= 0 &&
     c < cols &&
     grid[r][c] &&
-    grid[r][c].type === "road_straight_vertical";
+    (grid[r][c].type === "road_straight_vertical" ||
+      grid[r][c].type === "road_multilane_vertical");
+
   const getIsHorizontalRoad = (r, c) =>
     r >= 0 &&
     r < rows &&
     c >= 0 &&
     c < cols &&
     grid[r][c] &&
-    grid[r][c].type === "road_straight_horizontal";
+    (grid[r][c].type === "road_straight_horizontal" ||
+      grid[r][c].type === "road_multilane_horizontal");
+
   const getIsIntersection = (r, c) =>
     r >= 0 &&
     r < rows &&
@@ -635,90 +722,8 @@ const Grid = ({
     c < cols &&
     grid[r][c] &&
     grid[r][c].type === "road_intersection";
-  const getIsAnyRoad = (r, c) =>
-    getIsVerticalRoad(r, c) ||
-    getIsHorizontalRoad(r, c) ||
-    getIsIntersection(r, c);
 
-  const centerLines = useMemo(() => {
-    const lines = [];
-    for (let r = 0; r < rows; r++) {
-      for (let c = 0; c < cols; c++) {
-        if (!getIsAnyRoad(r, c)) continue;
-        const cx = (c + 0.5) * cellWidth;
-        const cy = (r + 0.5) * cellHeight;
-        if (getIsIntersection(r, c)) {
-          if (getIsVerticalRoad(r - 1, c) || getIsIntersection(r - 1, c))
-            lines.push({
-              x1: cx,
-              y1: cy,
-              x2: cx,
-              y2: cy - cellHeight,
-              key: `i-vu-${r}-${c}`,
-            });
-          if (getIsVerticalRoad(r + 1, c) || getIsIntersection(r + 1, c))
-            lines.push({
-              x1: cx,
-              y1: cy,
-              x2: cx,
-              y2: cy + cellHeight,
-              key: `i-vd-${r}-${c}`,
-            });
-          if (getIsHorizontalRoad(r, c - 1) || getIsIntersection(r, c - 1))
-            lines.push({
-              x1: cx,
-              y1: cy,
-              x2: cx - cellWidth,
-              y2: cy,
-              key: `i-hl-${r}-${c}`,
-            });
-          if (getIsHorizontalRoad(r, c + 1) || getIsIntersection(r, c + 1))
-            lines.push({
-              x1: cx,
-              y1: cy,
-              x2: cx + cellWidth,
-              y2: cy,
-              key: `i-hr-${r}-${c}`,
-            });
-        } else if (getIsVerticalRoad(r, c)) {
-          if (getIsVerticalRoad(r - 1, c) || getIsIntersection(r - 1, c))
-            lines.push({
-              x1: cx,
-              y1: cy,
-              x2: cx,
-              y2: cy - cellHeight, // FIXED: Connects Up vertically
-              key: `v-up-${r}-${c}`,
-            });
-          if (getIsVerticalRoad(r + 1, c) || getIsIntersection(r + 1, c))
-            lines.push({
-              x1: cx,
-              y1: cy,
-              x2: cx,
-              y2: cy + cellHeight,
-              key: `v-down-${r}-${c}`,
-            });
-        } else if (getIsHorizontalRoad(r, c)) {
-          if (getIsHorizontalRoad(r, c - 1) || getIsIntersection(r, c - 1))
-            lines.push({
-              x1: cx,
-              y1: cy,
-              x2: cx - cellWidth,
-              y2: cy,
-              key: `h-left-${r}-${c}`,
-            });
-          if (getIsHorizontalRoad(r, c + 1) || getIsIntersection(r, c + 1))
-            lines.push({
-              x1: cx,
-              y1: cy,
-              x2: cx + cellWidth,
-              y2: cy,
-              key: `h-right-${r}-${c}`,
-            });
-        }
-      }
-    }
-    return lines;
-  }, [grid, rows, cols, cellWidth, cellHeight]);
+  // Note: We deliberately do NOT draw center lines here anymore as requested previously.
 
   return (
     <div
@@ -743,6 +748,8 @@ const Grid = ({
             left: false,
             right: false,
           };
+
+          // Enhanced neighbor checks to support both standard and multilane roads connecting
           if (cellType === "road_intersection") {
             neighborInfo = {
               up:
@@ -758,7 +765,10 @@ const Grid = ({
                 getIsHorizontalRoad(rowIndex, colIndex + 1) ||
                 getIsIntersection(rowIndex, colIndex + 1),
             };
-          } else if (cellType === "road_straight_vertical") {
+          }
+
+          // Standard road checks
+          else if (cellType && cellType.includes("vertical")) {
             neighborInfo = {
               up:
                 getIsVerticalRoad(rowIndex - 1, colIndex) ||
@@ -769,7 +779,7 @@ const Grid = ({
               left: false,
               right: false,
             };
-          } else if (cellType === "road_straight_horizontal") {
+          } else if (cellType && cellType.includes("horizontal")) {
             neighborInfo = {
               up: false,
               down: false,
@@ -803,25 +813,11 @@ const Grid = ({
           );
         })
       )}
-      <svg
-        width={TOTAL_GRID_WIDTH_PX}
-        height={TOTAL_GRID_HEIGHT_PX}
-        style={{ position: "absolute", top: 0, left: 0, pointerEvents: "none" }}
-      >
-        {centerLines.map((line) => (
-          <line
-            {...line}
-            stroke="#FDE047"
-            strokeWidth="2"
-            strokeDasharray="10 10"
-            strokeLinecap="round"
-          />
-        ))}
-      </svg>
     </div>
   );
 };
 
+// --- Palette Item ---
 const PaletteItem = ({ item, isSelected, onClick }) => {
   const handleDragStart = (e) => e.dataTransfer.setData("itemType", item.type);
   return (
@@ -884,7 +880,6 @@ const SaveLoadModal = ({
     setLoading(false);
   };
 
-  // Logic for creating a NEW save
   const handleSaveNew = async () => {
     if (!saveName.trim()) return;
     try {
@@ -901,7 +896,7 @@ const SaveLoadModal = ({
       });
       if (response.ok) {
         const data = await response.json();
-        setCurrentLayoutId(data.id); // Update current ID to the new one
+        setCurrentLayoutId(data.id);
         onClose();
         alert("Saved as new layout!");
       } else setMessage("Save failed.");
@@ -910,12 +905,9 @@ const SaveLoadModal = ({
     }
   };
 
-  // Logic for OVERWRITING current save
   const handleOverwrite = async () => {
     if (!currentLayoutId) return;
     try {
-      // 1. Fetch the current layout first to get its existing Name/Description
-      // (This prevents the 'Name is required' error on the backend)
       const getResponse = await fetch(
         `${API_BASE_URL}/layouts/${currentLayoutId}/`
       );
@@ -925,14 +917,13 @@ const SaveLoadModal = ({
       }
       const originalLayout = await getResponse.json();
 
-      // 2. Send the PUT request with the existing name + new grid data
       const response = await fetch(
         `${API_BASE_URL}/layouts/${currentLayoutId}/`,
         {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            name: originalLayout.name, // <--- Crucial: Keep the old name
+            name: originalLayout.name,
             description: originalLayout.description || "",
             rows,
             cols,
@@ -967,7 +958,6 @@ const SaveLoadModal = ({
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fadeIn">
       <div className="bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col max-h-[80vh]">
-        {/* Header */}
         <div className="p-4 border-b border-slate-800 flex justify-between items-center bg-slate-800/50">
           <h2 className="text-lg font-bold text-white flex items-center gap-2">
             {mode === "save" ? (
@@ -988,7 +978,6 @@ const SaveLoadModal = ({
           </button>
         </div>
 
-        {/* Body */}
         <div className="p-6 overflow-y-auto custom-scrollbar">
           {message && (
             <div className="mb-4 p-2 bg-red-900/30 border border-red-500/30 text-red-300 rounded text-sm text-center">
@@ -998,7 +987,6 @@ const SaveLoadModal = ({
 
           {mode === "save" ? (
             <div className="space-y-6">
-              {/* Option 1: Overwrite (Only if a layout is loaded) */}
               {currentLayoutId && (
                 <div className="p-4 bg-emerald-900/20 border border-emerald-500/30 rounded-lg">
                   <div className="text-xs font-bold text-emerald-400 uppercase mb-2">
@@ -1021,7 +1009,6 @@ const SaveLoadModal = ({
                 </div>
               )}
 
-              {/* Option 2: Save As New */}
               <div>
                 <label className="block text-xs font-bold text-slate-500 uppercase mb-1">
                   {currentLayoutId ? "Save as New Layout" : "Layout Name"}
@@ -1043,7 +1030,6 @@ const SaveLoadModal = ({
               </div>
             </div>
           ) : (
-            // LOAD MODE
             <div className="space-y-3">
               {loading ? (
                 <div className="text-center text-slate-500 py-4">
@@ -1084,7 +1070,7 @@ const SaveLoadModal = ({
                             layout.grid_data,
                             layout.rows,
                             layout.cols,
-                            layout.id // <--- Passing ID back to App
+                            layout.id
                           );
                           onClose();
                         }}
@@ -1129,15 +1115,13 @@ export default function App() {
   const [selectedCell, setSelectedCell] = useState(null);
   const [currentLayoutId, setCurrentLayoutId] = useState(null);
 
-  // Modal State
-  const [activeModal, setActiveModal] = useState(null); // 'save' | 'load' | null
+  const [activeModal, setActiveModal] = useState(null);
 
   const getCell = (g, r, c) => {
     if (r < 0 || r >= g.length || c < 0 || c >= g[0].length) return null;
     return g[r][c];
   };
 
-  // --- Simulation Tick ---
   useEffect(() => {
     if (!isPlaying) return;
     const interval = setInterval(() => {
@@ -1153,7 +1137,6 @@ export default function App() {
             let cell = newGrid[r][c];
             if (!cell) continue;
 
-            // 1. Update Traffic Light Logic
             if (cell.type === "traffic_light") {
               if (!cell.config) cell.config = { green: 10, yellow: 4, red: 10 };
               if (!cell.state) cell.state = "green";
@@ -1170,7 +1153,6 @@ export default function App() {
               }
             }
 
-            // 2. Car Logic
             if (cell.hasCar && !movedCars.has(`${r},${c}`)) {
               const direction = cell.hasCar;
               let canMove = false;
@@ -1178,7 +1160,6 @@ export default function App() {
                 nextC = c,
                 nextDir = direction;
 
-              // --- Check for Adjacent Traffic Lights ---
               let isBlockedByLight = false;
               const adjOffsets = [
                 { dr: -1, dc: 0 },
@@ -1198,7 +1179,6 @@ export default function App() {
               }
 
               if (!isBlockedByLight) {
-                // Calculate "Straight Ahead"
                 if (direction === "up") nextR--;
                 if (direction === "down") nextR++;
                 if (direction === "left") nextC--;
@@ -1224,7 +1204,6 @@ export default function App() {
                   return true;
                 };
 
-                // STEP 1: Straight / Forced
                 if (
                   cell.flowDirection &&
                   cell.flowDirection.startsWith("turn_")
@@ -1254,12 +1233,10 @@ export default function App() {
                   tryToTurn = true;
                 }
 
-                // STEP 2: Turn Logic
                 if (!canMove && tryToTurn) {
                   const possibleTurns = [];
                   const currentFlow = cell.flowDirection;
 
-                  // Helper to check if a specific absolute direction is valid
                   const checkTurn = (dir) => {
                     if (currentFlow && currentFlow !== dir) return;
                     let dr = 0,
@@ -1321,12 +1298,9 @@ export default function App() {
                   }
                 }
 
-                // STEP 3: Execute Move
                 if (canMove) {
-                  const movingConfig = cell.carConfig; // Capture config
+                  const movingConfig = cell.carConfig;
 
-                  // 1. Explicitly CLEAR the old cell
-                  // We assign a NEW object to force React to see the update
                   if (cell.type) {
                     newGrid[r][c] = {
                       ...cell,
@@ -1337,8 +1311,6 @@ export default function App() {
                     newGrid[r][c] = null;
                   }
 
-                  // 2. Explicitly SET the new cell
-                  // We check again to ensure we don't crash boundaries
                   if (newGrid[nextR] && newGrid[nextR][nextC] !== undefined) {
                     const target = newGrid[nextR][nextC];
                     if (!target) {
@@ -1348,7 +1320,6 @@ export default function App() {
                         carConfig: movingConfig,
                       };
                     } else {
-                      // Force new object for target too
                       newGrid[nextR][nextC] = {
                         ...target,
                         hasCar: nextDir,
@@ -1358,13 +1329,8 @@ export default function App() {
                     movedCars.add(`${nextR},${nextC}`);
                   }
                 } else {
-                  // Car blocked (not by light, but by road logic) -> Update direction in place
                   newGrid[r][c] = { ...cell, hasCar: nextDir };
                 }
-              } else {
-                // Car blocked by LIGHT -> Stay in place
-                // No changes needed, but safe to ensure object integrity
-                // newGrid[r][c] is already a copy from the start of the tick
               }
             }
           }
@@ -1378,8 +1344,6 @@ export default function App() {
 
   const updateGrid = useCallback(
     (row, col, newItemOrType) => {
-      // FIX: Auto-pause simulation on interaction to prevent "racing" updates
-      // This stops the car from moving forward one tick when you try to delete something.
       if (isPlaying) setIsPlaying(false);
 
       setHistory((prev) => {
@@ -1388,24 +1352,18 @@ export default function App() {
           r.map((cell) => (cell ? { ...cell } : null))
         );
 
-        // Ensure we have a valid object to check properties on, even if cell is null
         let updatedCell = newGrid[row][col] || { type: null, hasCar: false };
 
         if (selectedTool === "select") return prev;
 
         if (newItemOrType === "eraser") {
-          // SMART DELETE LOGIC:
-          // 1. If there is a car, remove ONLY the car.
           if (updatedCell.hasCar) {
             updatedCell.hasCar = false;
             updatedCell.carConfig = undefined;
-            // We do NOT set updatedCell to null here, so the road underneath stays.
             if (newGrid[row][col]) {
               newGrid[row][col] = updatedCell;
             }
-          }
-          // 2. If no car, delete the tile entirely.
-          else {
+          } else {
             updatedCell = null;
             newGrid[row][col] = null;
           }
@@ -1413,7 +1371,52 @@ export default function App() {
           updatedCell.hasCar = "right";
           updatedCell.carConfig = { speed: 1, turnBias: "none" };
           newGrid[row][col] = updatedCell;
-        } else {
+        }
+
+        // --- AUTO-PLACEMENT LOGIC FOR MULTI-LANE ---
+        else if (newItemOrType === "road_multilane_vertical") {
+          updatedCell.type = newItemOrType;
+          updatedCell.laneCount = 2;
+          updatedCell.lanePosition = 0; // Primary (Left)
+          newGrid[row][col] = updatedCell;
+
+          // Automatically place a vertical road to the RIGHT
+          if (col + 1 < cols) {
+            const rightCell = newGrid[row][col + 1] || {
+              type: null,
+              hasCar: false,
+            };
+            if (!rightCell.type) {
+              // Only if empty
+              // FIX: Make the neighbor also a multilane road, but secondary
+              rightCell.type = "road_multilane_vertical";
+              rightCell.lanePosition = 1; // Secondary (Right)
+              newGrid[row][col + 1] = rightCell;
+            }
+          }
+        } else if (newItemOrType === "road_multilane_horizontal") {
+          updatedCell.type = newItemOrType;
+          updatedCell.laneCount = 2;
+          updatedCell.lanePosition = 0; // Primary (Top)
+          newGrid[row][col] = updatedCell;
+
+          // Automatically place a horizontal road BELOW
+          if (row + 1 < rows) {
+            const bottomCell = newGrid[row + 1][col] || {
+              type: null,
+              hasCar: false,
+            };
+            if (!bottomCell.type) {
+              // Only if empty
+              // FIX: Make the neighbor also a multilane road, but secondary
+              bottomCell.type = "road_multilane_horizontal";
+              bottomCell.lanePosition = 1; // Secondary (Bottom)
+              newGrid[row + 1][col] = bottomCell;
+            }
+          }
+        }
+        // --- STANDARD PLACEMENT ---
+        else {
           updatedCell.type = newItemOrType;
           if (newItemOrType === "traffic_light") {
             updatedCell.state = "green";
@@ -1427,7 +1430,7 @@ export default function App() {
       });
       setStep((s) => s + 1);
     },
-    [step, selectedTool, isPlaying] // Added isPlaying to dependencies
+    [step, selectedTool, isPlaying, rows, cols]
   );
 
   const updateTrafficLightConfig = (row, col, key, value) => {
@@ -1468,6 +1471,26 @@ export default function App() {
     setStep((s) => s + 1);
   };
 
+  // NEW: Update Lane Count setting
+  const updateLaneCount = (row, col, delta) => {
+    setHistory((prev) => {
+      const current = prev[step];
+      const newGrid = current.map((r) =>
+        r.map((cell) => (cell ? { ...cell } : null))
+      );
+      if (newGrid[row][col] && newGrid[row][col].type.includes("multilane")) {
+        const currentLanes = newGrid[row][col].laneCount || 2;
+        const newLanes = Math.max(2, Math.min(6, currentLanes + delta)); // Min 2, Max 6
+        newGrid[row][col].laneCount = newLanes;
+
+        // NOTE: Actual grid expansion logic (adding more adjacent tiles) would ideally happen here,
+        // but for this MVP we are just storing the setting. The user requested 2 lanes for now.
+      }
+      return [...prev.slice(0, step + 1), newGrid];
+    });
+    setStep((s) => s + 1);
+  };
+
   const updateCarConfig = (row, col, key, value) => {
     setHistory((prev) => {
       const current = prev[step];
@@ -1485,7 +1508,6 @@ export default function App() {
     setStep((s) => s + 1);
   };
 
-  // SMART DIRECTIONAL FLOOD FILL - LAST TILE IS 'ANY'
   const floodFillFlow = (row, col, direction) => {
     setHistory((prev) => {
       const current = prev[step];
@@ -1513,12 +1535,9 @@ export default function App() {
         const currentCell = newGrid[r][c];
 
         if (currentCell && currentCell.type.startsWith("road")) {
-          // --- INTERSECTION HANDLING ---
           if (currentCell.type === "road_intersection") {
-            // 1. Intersections become "Any" direction tiles that split flow
             currentCell.flowDirection = null;
 
-            // 2. Propagate outward in ALL valid connected directions
             const potentialExits = [
               { dr: -1, dc: 0, dir: "up" },
               { dr: 1, dc: 0, dir: "down" },
@@ -1543,7 +1562,6 @@ export default function App() {
             continue;
           }
 
-          // --- STANDARD STRAIGHT/TURN ROAD HANDLING ---
           let nextPropDir = currDir;
 
           if (r !== row || c !== col) {
@@ -1551,7 +1569,7 @@ export default function App() {
             let newFlow = currDir;
 
             if (
-              cellType === "road_straight_horizontal" &&
+              cellType.includes("horizontal") && // Covers both straight and multilane
               (currDir === "up" || currDir === "down")
             ) {
               const leftN = getCell(newGrid, r, c - 1);
@@ -1565,7 +1583,7 @@ export default function App() {
                 newFlow = `turn_${currDir}_right`;
               }
             } else if (
-              cellType === "road_straight_vertical" &&
+              cellType.includes("vertical") && // Covers both straight and multilane
               (currDir === "left" || currDir === "right")
             ) {
               const upN = getCell(newGrid, r - 1, c);
@@ -1580,7 +1598,6 @@ export default function App() {
               }
             }
 
-            // LOOK AHEAD LOGIC
             let dr = 0,
               dc = 0;
             if (nextPropDir === "up") dr = -1;
@@ -1600,7 +1617,7 @@ export default function App() {
             if (isNextCellValid) {
               currentCell.flowDirection = newFlow;
             } else {
-              currentCell.flowDirection = null; // Last tile is ANY
+              currentCell.flowDirection = null;
             }
           }
 
@@ -1711,7 +1728,6 @@ export default function App() {
                 CityBuilder<span className="text-blue-400 font-light">Pro</span>
               </h1>
             </div>
-            {/* CENTERED X BUTTON: Slate background, p-0 to override global padding, -mr-2 for position */}
             <button
               onClick={() => setIsSidebarOpen(false)}
               className="w-8 h-8 p-0 flex items-center justify-center bg-slate-700 hover:bg-slate-600 border border-slate-500 text-white rounded-full transition-all shadow-md ml-2 -mr-2 z-50"
@@ -1721,6 +1737,54 @@ export default function App() {
           </div>
 
           <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
+            {/* Properties Panel: Multi-Lane Road Settings (NEW) */}
+            {selectedCell &&
+              selectedCellData &&
+              selectedCellData.type &&
+              selectedCellData.type.includes("multilane") && (
+                <div className="mb-6 p-4 bg-slate-800 rounded-xl border-l-4 border-slate-400 shadow-md animate-fadeIn">
+                  <div className="flex justify-between items-center mb-3">
+                    <h2 className="text-sm font-bold text-white uppercase tracking-wider">
+                      🛣️ Road Config
+                    </h2>
+                    <button
+                      onClick={() => setSelectedCell(null)}
+                      className="text-xs text-slate-400 hover:text-white"
+                    >
+                      Close
+                    </button>
+                  </div>
+                  <div className="flex justify-between items-center text-xs">
+                    <span className="text-slate-300">Lanes:</span>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() =>
+                          updateLaneCount(
+                            selectedCell.row,
+                            selectedCell.col,
+                            -1
+                          )
+                        }
+                        className="w-6 h-6 bg-slate-700 rounded text-white hover:bg-slate-600"
+                      >
+                        -
+                      </button>
+                      <span className="font-bold text-white">
+                        {selectedCellData.laneCount || 2}
+                      </span>
+                      <button
+                        onClick={() =>
+                          updateLaneCount(selectedCell.row, selectedCell.col, 1)
+                        }
+                        className="w-6 h-6 bg-slate-700 rounded text-white hover:bg-slate-600"
+                      >
+                        +
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
             {/* Properties Panel: Traffic Light */}
             {selectedCell &&
               selectedCellData &&
