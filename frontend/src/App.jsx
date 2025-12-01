@@ -553,6 +553,7 @@ const GridCell = React.memo(
     col,
     onDrop,
     onPaint,
+    onRightClick, // <--- Add this to destructuring
     cellWidth,
     cellHeight,
     neighborInfo,
@@ -570,6 +571,7 @@ const GridCell = React.memo(
     };
     const handleContextMenu = (e) => {
       e.preventDefault();
+      onRightClick(row, col); // <--- Add this call
     };
 
     return (
@@ -683,8 +685,8 @@ const Grid = ({
             lines.push({
               x1: cx,
               y1: cy,
-              x2: cx, // Fixed: Keep X same for vertical line
-              y2: cy - cellHeight, // Fixed: Move Y up
+              x2: cx,
+              y2: cy - cellHeight, // FIXED: Connects Up vertically
               key: `v-up-${r}-${c}`,
             });
           if (getIsVerticalRoad(r + 1, c) || getIsIntersection(r + 1, c))
@@ -1082,6 +1084,8 @@ export default function App() {
               let nextR = r,
                 nextC = c,
                 nextDir = direction;
+
+              // Calculate "Straight Ahead" coordinates
               if (direction === "up") nextR--;
               if (direction === "down") nextR++;
               if (direction === "left") nextC--;
@@ -1089,89 +1093,128 @@ export default function App() {
 
               const targetCell = getCell(newGrid, nextR, nextC);
               let canMove = false;
+              let tryToTurn = false; // Flag to trigger turn searching
 
-              // Helper: Check possible moves for normal road logic
-              const getAvailableMoves = (r, c, incomingDir) => {
-                const moves = [];
-                const check = (dr, dc, dir) => {
-                  const t = getCell(newGrid, r + dr, c + dc);
-                  if (
-                    t &&
-                    (t.type.startsWith("road") || t.type === "traffic_light") &&
-                    !t.hasCar
-                  ) {
-                    // Check if t accepts incoming direction
-                    let accepts = true;
-                    if (t.type.startsWith("road")) {
-                      if (t.flowDirection) {
-                        if (t.flowDirection.startsWith("turn_")) {
-                          const entry = t.flowDirection.split("_")[1];
-                          if (dir !== entry) accepts = false;
-                        } else if (t.flowDirection !== dir) {
-                          accepts = false;
-                        }
-                      }
-                    }
-                    if (accepts) moves.push({ r: r + dr, c: c + dc, dir });
-                  }
-                };
-
-                if (incomingDir === "up" || incomingDir === "down") {
-                  check(0, -1, "left");
-                  check(0, 1, "right"); // Turns
-                  if (incomingDir === "up") check(-1, 0, "up"); // Straight
-                  if (incomingDir === "down") check(1, 0, "down");
-                } else {
-                  check(-1, 0, "up");
-                  check(1, 0, "down"); // Turns
-                  if (incomingDir === "left") check(0, -1, "left");
-                  if (incomingDir === "right") check(0, 1, "right");
+              // ---------------------------------------------------------
+              // HELPER: Check if a specific move is valid (Target allows entry)
+              // ---------------------------------------------------------
+              const isTargetCompatible = (tCell, entryDir) => {
+                if (!tCell) return false;
+                if (tCell.hasCar) return false;
+                if (tCell.type === "traffic_light") {
+                  // Treating green light as compatible road for turn checking
+                  // (Complex light logic handled separately if target is light)
+                  return (tCell.state || "green") === "green";
                 }
-                return moves;
+                if (!tCell.type.startsWith("road")) return false;
+
+                if (tCell.flowDirection) {
+                  if (tCell.flowDirection.startsWith("turn_")) {
+                    const entry = tCell.flowDirection.split("_")[1];
+                    return entryDir === entry;
+                  } else {
+                    return tCell.flowDirection === entryDir;
+                  }
+                }
+                return true; // Target is "Any" road
               };
 
-              // TRAFFIC LIGHT LOGIC
-              if (targetCell && targetCell.type === "traffic_light") {
-                const lightState = targetCell.state || "green";
+              // ---------------------------------------------------------
+              // STEP 1: Check Straight / Forced Path
+              // ---------------------------------------------------------
 
-                if (lightState === "green") {
-                  // GREEN: Calculate logic FROM the light cell to find exit
-                  // Get valid exits from the light
-                  const exits = getAvailableMoves(nextR, nextC, direction);
-                  // Filter out U-turn
-                  const validExits = exits.filter(
-                    (m) => !(m.r === r && m.c === c)
-                  );
-
-                  if (validExits.length > 0) {
-                    const exit =
-                      validExits[Math.floor(Math.random() * validExits.length)];
-                    nextR = exit.r;
-                    nextC = exit.c;
-                    nextDir = exit.dir;
-                    canMove = true;
-                  } else {
-                    canMove = false; // Dead end at light
-                  }
-                } else {
-                  canMove = false; // RED/YELLOW -> Stop
-                }
-              } else if (
-                targetCell &&
-                targetCell.type.startsWith("road") &&
-                !targetCell.hasCar
+              // A. Forced Turn (Current tile is a turn_ shape)
+              if (
+                cell.flowDirection &&
+                cell.flowDirection.startsWith("turn_")
               ) {
-                // Direction Check
-                let flowRestricted = false;
+                const parts = cell.flowDirection.split("_");
+                const exit = parts[2];
 
-                // If CURRENT cell has a turn, we MUST follow it (Force Move)
-                if (
-                  cell.flowDirection &&
-                  cell.flowDirection.startsWith("turn_")
-                ) {
-                  const parts = cell.flowDirection.split("_");
-                  const exit = parts[2];
-                  if (nextDir !== exit) {
+                // We MUST go this way.
+                nextDir = exit;
+                nextR = r;
+                nextC = c;
+                if (nextDir === "up") nextR--;
+                if (nextDir === "down") nextR++;
+                if (nextDir === "left") nextC--;
+                if (nextDir === "right") nextC++;
+
+                const forcedTarget = getCell(newGrid, nextR, nextC);
+
+                // If the forced move is blocked or incompatible, we stop.
+                // We cannot "search" for other turns because the track forces us here.
+                if (isTargetCompatible(forcedTarget, nextDir)) {
+                  canMove = true;
+                } else {
+                  canMove = false;
+                }
+              }
+              // 2. Car Logic
+              if (cell.hasCar && !movedCars.has(`${r},${c}`)) {
+                const direction = cell.hasCar;
+                let canMove = false;
+                let nextR = r,
+                  nextC = c,
+                  nextDir = direction;
+
+                // --- Check for Adjacent Traffic Lights ---
+                let isBlockedByLight = false;
+                const adjOffsets = [
+                  { dr: -1, dc: 0 },
+                  { dr: 1, dc: 0 },
+                  { dr: 0, dc: -1 },
+                  { dr: 0, dc: 1 },
+                ];
+
+                for (const offset of adjOffsets) {
+                  const neighbor = getCell(
+                    newGrid,
+                    r + offset.dr,
+                    c + offset.dc
+                  );
+                  if (neighbor && neighbor.type === "traffic_light") {
+                    const state = neighbor.state || "green";
+                    if (state === "yellow" || state === "red") {
+                      isBlockedByLight = true;
+                    }
+                  }
+                }
+
+                if (!isBlockedByLight) {
+                  // Calculate "Straight Ahead"
+                  if (direction === "up") nextR--;
+                  if (direction === "down") nextR++;
+                  if (direction === "left") nextC--;
+                  if (direction === "right") nextC++;
+
+                  const targetCell = getCell(newGrid, nextR, nextC);
+                  let tryToTurn = false;
+
+                  const isTargetCompatible = (tCell, entryDir) => {
+                    if (!tCell) return false;
+                    if (tCell.hasCar) return false;
+                    if (tCell.type === "traffic_light") return false;
+                    if (!tCell.type.startsWith("road")) return false;
+
+                    if (tCell.flowDirection) {
+                      if (tCell.flowDirection.startsWith("turn_")) {
+                        const entry = tCell.flowDirection.split("_")[1];
+                        return entryDir === entry;
+                      } else {
+                        return tCell.flowDirection === entryDir;
+                      }
+                    }
+                    return true;
+                  };
+
+                  // STEP 1: Straight / Forced
+                  if (
+                    cell.flowDirection &&
+                    cell.flowDirection.startsWith("turn_")
+                  ) {
+                    const parts = cell.flowDirection.split("_");
+                    const exit = parts[2];
                     nextDir = exit;
                     nextR = r;
                     nextC = c;
@@ -1180,132 +1223,220 @@ export default function App() {
                     if (nextDir === "left") nextC--;
                     if (nextDir === "right") nextC++;
 
-                    const forcedTarget = getCell(newGrid, nextR, nextC);
                     if (
-                      forcedTarget &&
-                      (forcedTarget.type.startsWith("road") ||
-                        forcedTarget.type === "traffic_light") &&
-                      !forcedTarget.hasCar
+                      isTargetCompatible(
+                        getCell(newGrid, nextR, nextC),
+                        nextDir
+                      )
                     ) {
-                      if (forcedTarget.type === "traffic_light") {
-                        const lightState = forcedTarget.state || "green";
-                        if (lightState !== "green") canMove = false;
-                        else canMove = true;
-                      } else {
-                        canMove = true;
-                      }
-                    } else {
-                      canMove = false;
+                      canMove = true;
                     }
-                    flowRestricted = true;
-                  }
-                }
-
-                if (!flowRestricted) {
-                  if (
-                    targetCell.flowDirection &&
-                    targetCell.flowDirection.startsWith("turn_")
-                  ) {
-                    const parts = targetCell.flowDirection.split("_");
-                    const entry = parts[1];
-                    if (direction !== entry) canMove = false;
-                    else canMove = true;
-                  } else if (
-                    targetCell.flowDirection &&
-                    targetCell.flowDirection !== nextDir
-                  ) {
-                    if (targetCell.flowDirection !== nextDir) canMove = false;
-                    else canMove = true;
+                  } else if (targetCell && targetCell.type.startsWith("road")) {
+                    if (isTargetCompatible(targetCell, nextDir)) {
+                      canMove = true;
+                    } else {
+                      tryToTurn = true;
+                    }
                   } else {
-                    canMove = true;
+                    tryToTurn = true;
                   }
-                }
-              } else {
-                const possibleTurns = [];
-                const currentFlow = cell.flowDirection;
 
+                  // STEP 2: Turn Logic
+                  if (!canMove && tryToTurn) {
+                    const possibleTurns = [];
+                    const currentFlow = cell.flowDirection;
+                    const checkTurn = (dr, dc, dir) => {
+                      if (currentFlow && currentFlow !== dir) return;
+                      const t = getCell(newGrid, r + dr, c + dc);
+                      if (isTargetCompatible(t, dir)) possibleTurns.push(dir);
+                    };
+
+                    if (direction === "up" || direction === "down") {
+                      checkTurn(0, -1, "left");
+                      checkTurn(0, 1, "right");
+                    } else {
+                      checkTurn(-1, 0, "up");
+                      checkTurn(1, 0, "down");
+                    }
+
+                    if (possibleTurns.length > 0) {
+                      // Bias logic can go here (simplified for brevity)
+                      nextDir =
+                        possibleTurns[
+                          Math.floor(Math.random() * possibleTurns.length)
+                        ];
+                      nextR = r;
+                      nextC = c;
+                      if (nextDir === "up") nextR--;
+                      if (nextDir === "down") nextR++;
+                      if (nextDir === "left") nextC--;
+                      if (nextDir === "right") nextC++;
+                      canMove = true;
+                    }
+                  }
+
+                  // STEP 3: Execute Move
+                  if (canMove) {
+                    const movingConfig = cell.carConfig; // Capture config
+
+                    // 1. Explicitly CLEAR the old cell
+                    // We assign a NEW object to force React to see the update
+                    if (cell.type) {
+                      newGrid[r][c] = {
+                        ...cell,
+                        hasCar: false,
+                        carConfig: undefined,
+                      };
+                    } else {
+                      newGrid[r][c] = null;
+                    }
+
+                    // 2. Explicitly SET the new cell
+                    // We check again to ensure we don't crash boundaries
+                    if (newGrid[nextR] && newGrid[nextR][nextC] !== undefined) {
+                      const target = newGrid[nextR][nextC];
+                      if (!target) {
+                        newGrid[nextR][nextC] = {
+                          type: "road_straight_horizontal",
+                          hasCar: nextDir,
+                          carConfig: movingConfig,
+                        };
+                      } else {
+                        // Force new object for target too
+                        newGrid[nextR][nextC] = {
+                          ...target,
+                          hasCar: nextDir,
+                          carConfig: movingConfig,
+                        };
+                      }
+                      movedCars.add(`${nextR},${nextC}`);
+                    }
+                  } else {
+                    // Car blocked (not by light, but by road logic) -> Update direction in place
+                    newGrid[r][c] = { ...cell, hasCar: nextDir };
+                  }
+                } else {
+                  // Car blocked by LIGHT -> Stay in place
+                  // No changes needed, but safe to ensure object integrity
+                  // newGrid[r][c] is already a copy from the start of the tick
+                }
+              }
+              // C. Standard Road Ahead
+              else if (
+                targetCell &&
+                targetCell.type.startsWith("road") &&
+                !targetCell.hasCar
+              ) {
+                if (isTargetCompatible(targetCell, nextDir)) {
+                  canMove = true;
+                } else {
+                  // TARGET EXISTS BUT IS WRONG DIRECTION -> Look for other turns
+                  tryToTurn = true;
+                }
+              }
+              // D. Wall / Empty Space Ahead
+              else {
+                tryToTurn = true;
+              }
+
+              // ---------------------------------------------------------
+              // STEP 2: Look for Turns (If Straight Failed)
+              // ---------------------------------------------------------
+              if (!canMove && tryToTurn) {
+                const possibleTurns = [];
+                const currentFlow = cell.flowDirection; // Current tile constraints
+
+                // Helper to check neighbors
                 const checkTurn = (dr, dc, dir) => {
+                  // 1. Does CURRENT tile allow this turn?
+                  // If we are on "Any", yes. If we are on "Up" arrow, we can't go Left.
                   if (currentFlow && currentFlow !== dir) return;
 
+                  // 2. Is the NEIGHBOR compatible?
                   const t = getCell(newGrid, r + dr, c + dc);
-                  if (t && t.type.startsWith("road") && !t.hasCar) {
-                    if (
-                      t.flowDirection &&
-                      t.flowDirection.startsWith("turn_")
-                    ) {
-                      const parts = t.flowDirection.split("_");
-                      if (dir === parts[1]) possibleTurns.push(dir);
-                    } else if (!t.flowDirection || t.flowDirection === dir) {
-                      possibleTurns.push(dir);
-                    }
+                  if (isTargetCompatible(t, dir)) {
+                    possibleTurns.push(dir);
                   }
                 };
 
-                if (cell.flowDirection) {
-                  let dr = 0,
-                    dc = 0;
-                  if (cell.flowDirection === "up") dr = -1;
-                  if (cell.flowDirection === "down") dr = 1;
-                  if (cell.flowDirection === "left") dc = -1;
-                  if (cell.flowDirection === "right") dc = 1;
-
-                  if (!cell.flowDirection.startsWith("turn_")) {
-                    const t = getCell(newGrid, r + dr, c + dc);
-                    if (t && t.type.startsWith("road") && !t.hasCar) {
-                      if (
-                        !t.flowDirection ||
-                        t.flowDirection === cell.flowDirection
-                      ) {
-                        nextDir = cell.flowDirection;
-                        nextR = r + dr;
-                        nextC = c + dc;
-                        canMove = true;
-                      }
-                    }
-                  }
+                // Check based on current orientation (Standard L/R turns)
+                if (direction === "up" || direction === "down") {
+                  checkTurn(0, -1, "left");
+                  checkTurn(0, 1, "right");
+                } else {
+                  checkTurn(-1, 0, "up");
+                  checkTurn(1, 0, "down");
                 }
 
-                if (!canMove) {
-                  if (direction === "up" || direction === "down") {
-                    checkTurn(0, -1, "left");
-                    checkTurn(0, 1, "right");
-                  } else {
-                    checkTurn(-1, 0, "up");
-                    checkTurn(1, 0, "down");
-                  }
+                if (possibleTurns.length > 0) {
+                  // --- Bias Logic (Copied from previous) ---
+                  const config = cell.carConfig || {};
+                  const bias = config.turnBias || "none";
+                  let chosenDir = null;
 
-                  if (possibleTurns.length > 0) {
-                    nextDir =
+                  if (bias !== "none") {
+                    const getRelativeDir = (current, turnType) => {
+                      const dirs = ["up", "right", "down", "left"];
+                      const idx = dirs.indexOf(current);
+                      if (idx === -1) return null;
+                      if (turnType === "left") return dirs[(idx + 3) % 4];
+                      if (turnType === "right") return dirs[(idx + 1) % 4];
+                      return null;
+                    };
+                    const preferredDir = getRelativeDir(direction, bias);
+                    if (preferredDir && possibleTurns.includes(preferredDir)) {
+                      if (Math.random() < 0.8) chosenDir = preferredDir;
+                    }
+                  }
+                  if (!chosenDir) {
+                    chosenDir =
                       possibleTurns[
                         Math.floor(Math.random() * possibleTurns.length)
                       ];
-                    nextR = r;
-                    nextC = c;
-                    if (nextDir === "up") nextR--;
-                    if (nextDir === "down") nextR++;
-                    if (nextDir === "left") nextC--;
-                    if (nextDir === "right") nextC++;
-                    canMove = true;
                   }
+                  // --- End Bias Logic ---
+
+                  nextDir = chosenDir;
+                  nextR = r;
+                  nextC = c;
+                  if (nextDir === "up") nextR--;
+                  if (nextDir === "down") nextR++;
+                  if (nextDir === "left") nextC--;
+                  if (nextDir === "right") nextC++;
+
+                  canMove = true;
                 }
               }
 
+              // ---------------------------------------------------------
+              // STEP 3: Execute Move
+              // ---------------------------------------------------------
               if (canMove) {
                 cell.hasCar = false;
+                const movingConfig = cell.carConfig;
+                cell.carConfig = undefined;
+
                 if (!cell.type) newGrid[r][c] = null;
+
+                // Double check target existence before writing (safety)
                 if (newGrid[nextR] && newGrid[nextR][nextC] !== undefined) {
-                  if (!newGrid[nextR][nextC]) {
+                  const target = newGrid[nextR][nextC];
+                  if (!target) {
+                    // Moving into empty space (shouldn't happen with isTargetCompatible checks, but safety)
                     newGrid[nextR][nextC] = {
-                      type: "road_straight_horizontal",
+                      type: "road_straight_horizontal", // default
                       hasCar: nextDir,
+                      carConfig: movingConfig,
                     };
                   } else {
-                    newGrid[nextR][nextC].hasCar = nextDir;
+                    target.hasCar = nextDir;
+                    target.carConfig = movingConfig;
                   }
                   movedCars.add(`${nextR},${nextC}`);
                 }
               } else {
-                cell.hasCar = nextDir;
+                // Car stays put
+                cell.hasCar = nextDir; // Update direction if it changed (e.g. waiting at turn)
               }
             }
           }
@@ -1319,19 +1450,41 @@ export default function App() {
 
   const updateGrid = useCallback(
     (row, col, newItemOrType) => {
+      // FIX: Auto-pause simulation on interaction to prevent "racing" updates
+      // This stops the car from moving forward one tick when you try to delete something.
+      if (isPlaying) setIsPlaying(false);
+
       setHistory((prev) => {
         const current = prev[step];
         const newGrid = current.map((r) =>
           r.map((cell) => (cell ? { ...cell } : null))
         );
+
+        // Ensure we have a valid object to check properties on, even if cell is null
         let updatedCell = newGrid[row][col] || { type: null, hasCar: false };
 
         if (selectedTool === "select") return prev;
 
         if (newItemOrType === "eraser") {
-          updatedCell = null;
+          // SMART DELETE LOGIC:
+          // 1. If there is a car, remove ONLY the car.
+          if (updatedCell.hasCar) {
+            updatedCell.hasCar = false;
+            updatedCell.carConfig = undefined;
+            // We do NOT set updatedCell to null here, so the road underneath stays.
+            if (newGrid[row][col]) {
+              newGrid[row][col] = updatedCell;
+            }
+          }
+          // 2. If no car, delete the tile entirely.
+          else {
+            updatedCell = null;
+            newGrid[row][col] = null;
+          }
         } else if (newItemOrType === "car") {
           updatedCell.hasCar = "right";
+          updatedCell.carConfig = { speed: 1, turnBias: "none" };
+          newGrid[row][col] = updatedCell;
         } else {
           updatedCell.type = newItemOrType;
           if (newItemOrType === "traffic_light") {
@@ -1339,13 +1492,14 @@ export default function App() {
             updatedCell.timer = 0;
             updatedCell.config = { green: 10, yellow: 4, red: 10 };
           }
+          newGrid[row][col] = updatedCell;
         }
-        newGrid[row][col] = updatedCell;
+
         return [...prev.slice(0, step + 1), newGrid];
       });
       setStep((s) => s + 1);
     },
-    [step, selectedTool]
+    [step, selectedTool, isPlaying] // Added isPlaying to dependencies
   );
 
   const updateTrafficLightConfig = (row, col, key, value) => {
@@ -1386,7 +1540,24 @@ export default function App() {
     setStep((s) => s + 1);
   };
 
-  // SMART DIRECTIONAL FLOOD FILL
+  const updateCarConfig = (row, col, key, value) => {
+    setHistory((prev) => {
+      const current = prev[step];
+      const newGrid = current.map((r) =>
+        r.map((cell) => (cell ? { ...cell } : null))
+      );
+      if (newGrid[row][col] && newGrid[row][col].hasCar) {
+        newGrid[row][col].carConfig = {
+          ...newGrid[row][col].carConfig,
+          [key]: value,
+        };
+      }
+      return [...prev.slice(0, step + 1), newGrid];
+    });
+    setStep((s) => s + 1);
+  };
+
+  // SMART DIRECTIONAL FLOOD FILL - LAST TILE IS 'ANY'
   const floodFillFlow = (row, col, direction) => {
     setHistory((prev) => {
       const current = prev[step];
@@ -1405,72 +1576,81 @@ export default function App() {
       const visited = new Set();
 
       while (queue.length > 0) {
-        let [r, c, currDir] = queue.shift(); // CHANGED const to let
+        let [r, c, currDir] = queue.shift();
         const key = `${r},${c}`;
 
         if (visited.has(key)) continue;
         visited.add(key);
 
         if (newGrid[r][c] && newGrid[r][c].type.startsWith("road")) {
-          if (r !== row || c !== col) {
-            const cellType = newGrid[r][c].type;
-            let newFlow = currDir;
-            let nextPropDir = currDir;
+          // 1. Calculate the intended flow and next direction (Turn Logic)
+          const cellType = newGrid[r][c].type;
+          let newFlow = currDir;
+          let nextPropDir = currDir;
 
-            if (
-              cellType === "road_straight_horizontal" &&
-              (currDir === "up" || currDir === "down")
-            ) {
-              const leftN = getCell(newGrid, r, c - 1);
-              const rightN = getCell(newGrid, r, c + 1);
+          if (
+            cellType === "road_straight_horizontal" &&
+            (currDir === "up" || currDir === "down")
+          ) {
+            const leftN = getCell(newGrid, r, c - 1);
+            const rightN = getCell(newGrid, r, c + 1);
 
-              if (leftN && leftN.type.startsWith("road")) {
-                nextPropDir = "left";
-                newFlow = `turn_${currDir}_left`;
-              } else if (rightN && rightN.type.startsWith("road")) {
-                nextPropDir = "right";
-                newFlow = `turn_${currDir}_right`;
-              }
-            } else if (
-              cellType === "road_straight_vertical" &&
-              (currDir === "left" || currDir === "right")
-            ) {
-              const upN = getCell(newGrid, r - 1, c);
-              const downN = getCell(newGrid, r + 1, c);
-
-              if (upN && upN.type.startsWith("road")) {
-                nextPropDir = "up";
-                newFlow = `turn_${currDir}_up`;
-              } else if (downN && downN.type.startsWith("road")) {
-                nextPropDir = "down";
-                newFlow = `turn_${currDir}_down`;
-              }
+            if (leftN && leftN.type.startsWith("road")) {
+              nextPropDir = "left";
+              newFlow = `turn_${currDir}_left`;
+            } else if (rightN && rightN.type.startsWith("road")) {
+              nextPropDir = "right";
+              newFlow = `turn_${currDir}_right`;
             }
+          } else if (
+            cellType === "road_straight_vertical" &&
+            (currDir === "left" || currDir === "right")
+          ) {
+            const upN = getCell(newGrid, r - 1, c);
+            const downN = getCell(newGrid, r + 1, c);
 
-            newGrid[r][c].flowDirection = newFlow;
-            currDir = nextPropDir;
+            if (upN && upN.type.startsWith("road")) {
+              nextPropDir = "up";
+              newFlow = `turn_${currDir}_up`;
+            } else if (downN && downN.type.startsWith("road")) {
+              nextPropDir = "down";
+              newFlow = `turn_${currDir}_down`;
+            }
           }
 
+          // 2. Calculate coordinates of the NEXT cell based on that direction
           let dr = 0,
             dc = 0;
-          if (currDir === "up") dr = -1;
-          if (currDir === "down") dr = 1;
-          if (currDir === "left") dc = -1;
-          if (currDir === "right") dc = 1;
+          if (nextPropDir === "up") dr = -1;
+          if (nextPropDir === "down") dr = 1;
+          if (nextPropDir === "left") dc = -1;
+          if (nextPropDir === "right") dc = 1;
 
-          if (dr !== 0 || dc !== 0) {
-            const nr = r + dr,
-              nc = c + dc;
-            if (
-              nr >= 0 &&
-              nr < rows &&
-              nc >= 0 &&
-              nc < cols &&
-              newGrid[nr][nc] &&
-              newGrid[nr][nc].type.startsWith("road")
-            ) {
-              queue.push([nr, nc, currDir]);
+          const nr = r + dr;
+          const nc = c + dc;
+
+          // 3. CHECK AHEAD: Does the next cell exist and is it a road?
+          const isNextCellValid =
+            nr >= 0 &&
+            nr < rows &&
+            nc >= 0 &&
+            nc < cols &&
+            newGrid[nr][nc] &&
+            newGrid[nr][nc].type.startsWith("road");
+
+          if (r !== row || c !== col) {
+            if (isNextCellValid) {
+              // CASE A: Not the last tile. Apply the calculated flow.
+              newGrid[r][c].flowDirection = newFlow;
+            } else {
+              // CASE B: It IS the last tile. Set to "Any" (null).
+              newGrid[r][c].flowDirection = null;
             }
+          }
+
+          // 4. If valid, continue the flood fill
+          if (isNextCellValid) {
+            queue.push([nr, nc, nextPropDir]);
           }
         }
       }
@@ -1555,7 +1735,7 @@ export default function App() {
                 CityBuilder<span className="text-blue-400 font-light">Pro</span>
               </h1>
             </div>
-            {/* CENTERED X BUTTON: Slate background, p-0 to override global padding */}
+            {/* CENTERED X BUTTON: Slate background, p-0 to override global padding, -mr-2 for position */}
             <button
               onClick={() => setIsSidebarOpen(false)}
               className="w-8 h-8 p-0 flex items-center justify-center bg-slate-700 hover:bg-slate-600 border border-slate-500 text-white rounded-full transition-all shadow-md ml-2 -mr-2 z-50"
@@ -1666,9 +1846,113 @@ export default function App() {
                 </div>
               )}
 
+            {/* Properties Panel: Car Settings */}
+            {selectedCell && selectedCellData && selectedCellData.hasCar && (
+              <div className="mb-6 p-4 bg-slate-800 rounded-xl border-l-4 border-orange-500 shadow-md animate-fadeIn">
+                <div className="flex justify-between items-center mb-3">
+                  <h2 className="text-sm font-bold text-white uppercase tracking-wider">
+                    🚗 Car Settings
+                  </h2>
+                  <button
+                    onClick={() => setSelectedCell(null)}
+                    className="text-xs text-slate-400 hover:text-white"
+                  >
+                    Close
+                  </button>
+                </div>
+                <div className="space-y-4">
+                  {/* Speed Control */}
+                  <div>
+                    <div className="flex justify-between text-[10px] text-slate-400 mb-1">
+                      <span>Speed</span>
+                      <span>{selectedCellData.carConfig?.speed || 1}x</span>
+                    </div>
+                    <input
+                      type="range"
+                      min="1"
+                      max="3"
+                      step="0.5"
+                      value={selectedCellData.carConfig?.speed || 1}
+                      onChange={(e) =>
+                        updateCarConfig(
+                          selectedCell.row,
+                          selectedCell.col,
+                          "speed",
+                          parseFloat(e.target.value)
+                        )
+                      }
+                      className="w-full accent-orange-500 h-1 bg-slate-700 rounded-lg appearance-none cursor-pointer"
+                    />
+                  </div>
+
+                  {/* Turn Bias */}
+                  <div>
+                    <label className="text-[10px] text-slate-400 block mb-2">
+                      Turn Priority
+                    </label>
+                    <div className="grid grid-cols-3 gap-2">
+                      <button
+                        onClick={() =>
+                          updateCarConfig(
+                            selectedCell.row,
+                            selectedCell.col,
+                            "turnBias",
+                            "left"
+                          )
+                        }
+                        className={`p-2 rounded text-xs border ${
+                          selectedCellData.carConfig?.turnBias === "left"
+                            ? "bg-orange-600 border-orange-400 text-white"
+                            : "bg-slate-700 border-slate-600 text-slate-400"
+                        }`}
+                      >
+                        ⬅ Left
+                      </button>
+                      <button
+                        onClick={() =>
+                          updateCarConfig(
+                            selectedCell.row,
+                            selectedCell.col,
+                            "turnBias",
+                            "none"
+                          )
+                        }
+                        className={`p-2 rounded text-xs border ${
+                          !selectedCellData.carConfig?.turnBias ||
+                          selectedCellData.carConfig?.turnBias === "none"
+                            ? "bg-orange-600 border-orange-400 text-white"
+                            : "bg-slate-700 border-slate-600 text-slate-400"
+                        }`}
+                      >
+                        None
+                      </button>
+                      <button
+                        onClick={() =>
+                          updateCarConfig(
+                            selectedCell.row,
+                            selectedCell.col,
+                            "turnBias",
+                            "right"
+                          )
+                        }
+                        className={`p-2 rounded text-xs border ${
+                          selectedCellData.carConfig?.turnBias === "right"
+                            ? "bg-orange-600 border-orange-400 text-white"
+                            : "bg-slate-700 border-slate-600 text-slate-400"
+                        }`}
+                      >
+                        Right ➡
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Properties Panel: Road Flow Control */}
             {selectedCell &&
               selectedCellData &&
+              selectedCellData.type && // Added Null Check
               selectedCellData.type.startsWith("road") && (
                 <div className="mb-6 p-4 bg-slate-800 rounded-xl border-l-4 border-emerald-500 shadow-md animate-fadeIn">
                   <div className="flex justify-between items-center mb-3">
@@ -1929,6 +2213,7 @@ export default function App() {
             {/* Standard Selected Cell Info (Fallback) */}
             {selectedCell &&
               selectedCellData &&
+              selectedCellData.type && // Added null check
               !selectedCellData.type.startsWith("road") &&
               selectedCellData.type !== "traffic_light" && (
                 <div className="mb-6 p-4 bg-slate-800 rounded-xl border border-slate-700">
@@ -2058,7 +2343,15 @@ export default function App() {
           <button
             onClick={() => {
               if (confirm("Clear entire grid? This cannot be undone.")) {
-                setHistory((prev) => [...prev, createEmptyGrid(rows, cols)]);
+                // 1. Pause immediately to stop race conditions
+                setIsPlaying(false);
+
+                // 2. Slice history to current step before appending, so we don't jump to old "redo" states
+                setHistory((prev) => [
+                  ...prev.slice(0, step + 1),
+                  createEmptyGrid(rows, cols),
+                ]);
+
                 setStep((s) => s + 1);
               }
             }}
