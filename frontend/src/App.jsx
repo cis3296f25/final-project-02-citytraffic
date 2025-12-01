@@ -209,6 +209,19 @@ const ROAD_PALETTE_ITEMS = [
     emoji: "═",
     color: "from-slate-600 to-slate-500",
   },
+  // --- NEW DIVIDER ROADS ---
+  {
+    type: "road_divider_vertical",
+    label: "Divider Vert",
+    emoji: "⎸",
+    color: "from-yellow-600 to-yellow-500",
+  },
+  {
+    type: "road_divider_horizontal",
+    label: "Divider Horz",
+    emoji: "―",
+    color: "from-yellow-600 to-yellow-500",
+  },
 ];
 
 const DECORATION_PALETTE_ITEMS = [
@@ -435,8 +448,73 @@ const renderCellContent = (cellData, neighborInfo) => {
       const strokeWidth = 80;
       const center = 50;
 
+      // --- NEW DIVIDER RENDERING ---
+      if (cellType === "road_divider_vertical") {
+        const pos = cellData.lanePosition || 0; // 0=Left, 1=Right
+
+        // Background Road
+        content.push(
+          <line
+            key="bg-road"
+            x1={center}
+            y1={-1}
+            x2={center}
+            y2={101}
+            stroke={strokeColor}
+            strokeWidth={strokeWidth}
+          />
+        );
+
+        // Solid Yellow Line Logic
+        // If Left (Primary), draw on Right Edge (100)
+        // If Right (Secondary), draw on Left Edge (0)
+        const lineX = pos === 0 ? 100 : 0;
+        content.push(
+          <line
+            key="divider-line"
+            x1={lineX}
+            y1={0}
+            x2={lineX}
+            y2={100}
+            stroke="#FACC15" // Yellow-400
+            strokeWidth="6"
+          />
+        );
+      } else if (cellType === "road_divider_horizontal") {
+        const pos = cellData.lanePosition || 0; // 0=Top, 1=Bottom
+
+        // Background Road
+        content.push(
+          <line
+            key="bg-road"
+            x1={-1}
+            y1={center}
+            x2={101}
+            y2={center}
+            stroke={strokeColor}
+            strokeWidth={strokeWidth}
+          />
+        );
+
+        // Solid Yellow Line Logic
+        // If Top (Primary), draw on Bottom Edge (100)
+        // If Bottom (Secondary), draw on Top Edge (0)
+        const lineY = pos === 0 ? 100 : 0;
+        content.push(
+          <line
+            key="divider-line"
+            x1={0}
+            y1={lineY}
+            x2={100}
+            y2={lineY}
+            stroke="#FACC15" // Yellow-400
+            strokeWidth="6"
+          />
+        );
+      }
+
       // --- MULTI-LANE RENDERING (N-Lanes) ---
-      if (cellType === "road_multilane_vertical") {
+      else if (cellType === "road_multilane_vertical") {
         const pos = cellData.lanePosition || 0;
         const count = cellData.laneCount || 2;
 
@@ -453,7 +531,7 @@ const renderCellContent = (cellData, neighborInfo) => {
           />
         );
 
-        // Left Dotted Line (if not the first lane)
+        // Left Dotted Line
         if (pos > 0) {
           content.push(
             <line
@@ -469,7 +547,7 @@ const renderCellContent = (cellData, neighborInfo) => {
           );
         }
 
-        // Right Dotted Line (if not the last lane)
+        // Right Dotted Line
         if (pos < count - 1) {
           content.push(
             <line
@@ -501,7 +579,7 @@ const renderCellContent = (cellData, neighborInfo) => {
           />
         );
 
-        // Top Dotted Line (if not the first lane)
+        // Top Dotted Line
         if (pos > 0) {
           content.push(
             <line
@@ -517,7 +595,7 @@ const renderCellContent = (cellData, neighborInfo) => {
           );
         }
 
-        // Bottom Dotted Line (if not the last lane)
+        // Bottom Dotted Line
         if (pos < count - 1) {
           content.push(
             <line
@@ -734,7 +812,8 @@ const Grid = ({
     c < cols &&
     grid[r][c] &&
     (grid[r][c].type === "road_straight_vertical" ||
-      grid[r][c].type === "road_multilane_vertical");
+      grid[r][c].type === "road_multilane_vertical" ||
+      grid[r][c].type === "road_divider_vertical"); // ADDED
 
   const getIsHorizontalRoad = (r, c) =>
     r >= 0 &&
@@ -743,7 +822,8 @@ const Grid = ({
     c < cols &&
     grid[r][c] &&
     (grid[r][c].type === "road_straight_horizontal" ||
-      grid[r][c].type === "road_multilane_horizontal");
+      grid[r][c].type === "road_multilane_horizontal" ||
+      grid[r][c].type === "road_divider_horizontal"); // ADDED
 
   const getIsIntersection = (r, c) =>
     r >= 0 &&
@@ -1183,7 +1263,21 @@ export default function App() {
             }
 
             if (cell.hasCar && !movedCars.has(`${r},${c}`)) {
-              const direction = cell.hasCar;
+              let direction = cell.hasCar; // CHANGED to let for modification
+              const currentFlow = cell.flowDirection;
+
+              // --- WRONG WAY CORRECTION ---
+              if (currentFlow) {
+                if (currentFlow === "left" && direction === "right")
+                  direction = "left";
+                else if (currentFlow === "right" && direction === "left")
+                  direction = "right";
+                else if (currentFlow === "up" && direction === "down")
+                  direction = "up";
+                else if (currentFlow === "down" && direction === "up")
+                  direction = "down";
+              }
+
               let canMove = false;
               let nextR = r,
                 nextC = c,
@@ -1397,9 +1491,54 @@ export default function App() {
             newGrid[row][col] = null;
           }
         } else if (newItemOrType === "car") {
-          updatedCell.hasCar = "right";
+          // --- FIX: INHERIT ROAD DIRECTION ON PLACEMENT ---
+          let startDir = "right";
+          if (
+            updatedCell.flowDirection &&
+            !updatedCell.flowDirection.startsWith("turn")
+          ) {
+            startDir = updatedCell.flowDirection;
+          }
+          updatedCell.hasCar = startDir;
           updatedCell.carConfig = { speed: 1, turnBias: "none" };
           newGrid[row][col] = updatedCell;
+        }
+
+        // --- NEW DIVIDER PLACEMENT LOGIC ---
+        else if (newItemOrType === "road_divider_vertical") {
+          updatedCell.type = newItemOrType;
+          updatedCell.lanePosition = 0; // Left (Primary)
+          newGrid[row][col] = updatedCell;
+
+          // Auto-place secondary lane to the right
+          if (col + 1 < cols) {
+            const rightCell = newGrid[row][col + 1] || {
+              type: null,
+              hasCar: false,
+            };
+            if (!rightCell.type) {
+              rightCell.type = "road_divider_vertical";
+              rightCell.lanePosition = 1; // Right (Secondary)
+              newGrid[row][col + 1] = rightCell;
+            }
+          }
+        } else if (newItemOrType === "road_divider_horizontal") {
+          updatedCell.type = newItemOrType;
+          updatedCell.lanePosition = 0; // Top (Primary)
+          newGrid[row][col] = updatedCell;
+
+          // Auto-place secondary lane below
+          if (row + 1 < rows) {
+            const bottomCell = newGrid[row + 1][col] || {
+              type: null,
+              hasCar: false,
+            };
+            if (!bottomCell.type) {
+              bottomCell.type = "road_divider_horizontal";
+              bottomCell.lanePosition = 1; // Bottom (Secondary)
+              newGrid[row + 1][col] = bottomCell;
+            }
+          }
         }
 
         // --- AUTO-PLACEMENT LOGIC FOR MULTI-LANE ---
@@ -1412,8 +1551,10 @@ export default function App() {
                 type: null,
                 hasCar: false,
               };
-              // Overwrite if it's the target or if it's empty/road
-              // (Simple "Force Place" logic for the block)
+
+              // PROTECT EXISTING DIVIDER: Do not overwrite it
+              if (cell.type && cell.type.includes("divider")) continue;
+
               cell.type = newItemOrType;
               cell.laneCount = laneCount;
               cell.lanePosition = i;
@@ -1429,6 +1570,10 @@ export default function App() {
                 type: null,
                 hasCar: false,
               };
+
+              // PROTECT EXISTING DIVIDER
+              if (cell.type && cell.type.includes("divider")) continue;
+
               cell.type = newItemOrType;
               cell.laneCount = laneCount;
               cell.lanePosition = i;
@@ -1522,6 +1667,14 @@ export default function App() {
           const c = isVertical ? baseC + i : baseC;
 
           if (r >= 0 && r < rows && c >= 0 && c < cols) {
+            // PROTECT DIVIDER during expansion
+            if (
+              newGrid[r][c] &&
+              newGrid[r][c].type &&
+              newGrid[r][c].type.includes("divider")
+            )
+              continue;
+
             if (i < newLanes) {
               // Update/Create Lane
               const cell = newGrid[r][c] || { type: null, hasCar: false };
@@ -1847,7 +2000,6 @@ export default function App() {
                         onClick={() =>
                           setToolLaneCount(Math.max(2, toolLaneCount - 1))
                         }
-                        // ADDED: flex items-center justify-center
                         className="w-6 h-6 bg-slate-700 rounded text-white hover:bg-slate-600 flex items-center justify-center"
                       >
                         -
@@ -1859,7 +2011,6 @@ export default function App() {
                         onClick={() =>
                           setToolLaneCount(Math.min(6, toolLaneCount + 1))
                         }
-                        // ADDED: flex items-center justify-center
                         className="w-6 h-6 bg-slate-700 rounded text-white hover:bg-slate-600 flex items-center justify-center"
                       >
                         +
@@ -1900,7 +2051,6 @@ export default function App() {
                             -1
                           )
                         }
-                        // ADDED: flex items-center justify-center
                         className="w-6 h-6 bg-slate-700 rounded text-white hover:bg-slate-600 flex items-center justify-center"
                       >
                         -
@@ -1912,7 +2062,6 @@ export default function App() {
                         onClick={() =>
                           updateLaneCount(selectedCell.row, selectedCell.col, 1)
                         }
-                        // ADDED: flex items-center justify-center
                         className="w-6 h-6 bg-slate-700 rounded text-white hover:bg-slate-600 flex items-center justify-center"
                       >
                         +
