@@ -196,16 +196,16 @@ const ROAD_PALETTE_ITEMS = [
     emoji: "➕",
     color: "from-gray-600 to-gray-500",
   },
-  // --- NEW MULTI-LANE ROADS ---
+  // --- MULTI-LANE ROADS ---
   {
     type: "road_multilane_vertical",
-    label: "2-Lane Vert",
+    label: "Multi-Lane Vert",
     emoji: "║",
     color: "from-slate-600 to-slate-500",
   },
   {
     type: "road_multilane_horizontal",
-    label: "2-Lane Horz",
+    label: "Multi-Lane Horz",
     emoji: "═",
     color: "from-slate-600 to-slate-500",
   },
@@ -435,11 +435,12 @@ const renderCellContent = (cellData, neighborInfo) => {
       const strokeWidth = 80;
       const center = 50;
 
-      // --- MULTI-LANE RENDERING ---
+      // --- MULTI-LANE RENDERING (N-Lanes) ---
       if (cellType === "road_multilane_vertical") {
-        const isRightLane = cellData.lanePosition === 1; // 0 = Left (Primary), 1 = Right (Secondary)
+        const pos = cellData.lanePosition || 0;
+        const count = cellData.laneCount || 2;
 
-        // Background Road (Gray)
+        // Background
         content.push(
           <line
             key="bg-road"
@@ -452,27 +453,42 @@ const renderCellContent = (cellData, neighborInfo) => {
           />
         );
 
-        // Thicker Dotted White Line
-        // If Primary (Left): Draw on Right Edge (x=100)
-        // If Secondary (Right): Draw on Left Edge (x=0)
-        const lineX = isRightLane ? 0 : 100;
+        // Left Dotted Line (if not the first lane)
+        if (pos > 0) {
+          content.push(
+            <line
+              key="dashed-line-left"
+              x1={0}
+              y1={0}
+              x2={0}
+              y2={100}
+              stroke="white"
+              strokeWidth="6"
+              strokeDasharray="12,12"
+            />
+          );
+        }
 
-        content.push(
-          <line
-            key="dashed-line"
-            x1={lineX}
-            y1={0}
-            x2={lineX}
-            y2={100}
-            stroke="white"
-            strokeWidth="6"
-            strokeDasharray="12,12"
-          />
-        );
+        // Right Dotted Line (if not the last lane)
+        if (pos < count - 1) {
+          content.push(
+            <line
+              key="dashed-line-right"
+              x1={100}
+              y1={0}
+              x2={100}
+              y2={100}
+              stroke="white"
+              strokeWidth="6"
+              strokeDasharray="12,12"
+            />
+          );
+        }
       } else if (cellType === "road_multilane_horizontal") {
-        const isBottomLane = cellData.lanePosition === 1; // 0 = Top (Primary), 1 = Bottom (Secondary)
+        const pos = cellData.lanePosition || 0;
+        const count = cellData.laneCount || 2;
 
-        // Background Road
+        // Background
         content.push(
           <line
             key="bg-road"
@@ -485,23 +501,37 @@ const renderCellContent = (cellData, neighborInfo) => {
           />
         );
 
-        // Thicker Dotted White Line
-        // If Primary (Top): Draw on Bottom Edge (y=100)
-        // If Secondary (Bottom): Draw on Top Edge (y=0)
-        const lineY = isBottomLane ? 0 : 100;
+        // Top Dotted Line (if not the first lane)
+        if (pos > 0) {
+          content.push(
+            <line
+              key="dashed-line-top"
+              x1={0}
+              y1={0}
+              x2={100}
+              y2={0}
+              stroke="white"
+              strokeWidth="6"
+              strokeDasharray="12,12"
+            />
+          );
+        }
 
-        content.push(
-          <line
-            key="dashed-line"
-            x1={0}
-            y1={lineY}
-            x2={100}
-            y2={lineY}
-            stroke="white"
-            strokeWidth="6"
-            strokeDasharray="12,12"
-          />
-        );
+        // Bottom Dotted Line (if not the last lane)
+        if (pos < count - 1) {
+          content.push(
+            <line
+              key="dashed-line-bottom"
+              x1={0}
+              y1={100}
+              x2={100}
+              y2={100}
+              stroke="white"
+              strokeWidth="6"
+              strokeDasharray="12,12"
+            />
+          );
+        }
       }
       // --- STANDARD ROADS ---
       else if (cellType === "road_intersection") {
@@ -722,8 +752,6 @@ const Grid = ({
     c < cols &&
     grid[r][c] &&
     grid[r][c].type === "road_intersection";
-
-  // Note: We deliberately do NOT draw center lines here anymore as requested previously.
 
   return (
     <div
@@ -1114,6 +1142,7 @@ export default function App() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [selectedCell, setSelectedCell] = useState(null);
   const [currentLayoutId, setCurrentLayoutId] = useState(null);
+  const [toolLaneCount, setToolLaneCount] = useState(2); // State for "Tool Config"
 
   const [activeModal, setActiveModal] = useState(null);
 
@@ -1375,43 +1404,35 @@ export default function App() {
 
         // --- AUTO-PLACEMENT LOGIC FOR MULTI-LANE ---
         else if (newItemOrType === "road_multilane_vertical") {
-          updatedCell.type = newItemOrType;
-          updatedCell.laneCount = 2;
-          updatedCell.lanePosition = 0; // Primary (Left)
-          newGrid[row][col] = updatedCell;
+          const laneCount = toolLaneCount; // Default N from state
 
-          // Automatically place a vertical road to the RIGHT
-          if (col + 1 < cols) {
-            const rightCell = newGrid[row][col + 1] || {
-              type: null,
-              hasCar: false,
-            };
-            if (!rightCell.type) {
-              // Only if empty
-              // FIX: Make the neighbor also a multilane road, but secondary
-              rightCell.type = "road_multilane_vertical";
-              rightCell.lanePosition = 1; // Secondary (Right)
-              newGrid[row][col + 1] = rightCell;
+          for (let i = 0; i < laneCount; i++) {
+            if (col + i < cols) {
+              const cell = newGrid[row][col + i] || {
+                type: null,
+                hasCar: false,
+              };
+              // Overwrite if it's the target or if it's empty/road
+              // (Simple "Force Place" logic for the block)
+              cell.type = newItemOrType;
+              cell.laneCount = laneCount;
+              cell.lanePosition = i;
+              newGrid[row][col + i] = cell;
             }
           }
         } else if (newItemOrType === "road_multilane_horizontal") {
-          updatedCell.type = newItemOrType;
-          updatedCell.laneCount = 2;
-          updatedCell.lanePosition = 0; // Primary (Top)
-          newGrid[row][col] = updatedCell;
+          const laneCount = toolLaneCount; // Default N from state
 
-          // Automatically place a horizontal road BELOW
-          if (row + 1 < rows) {
-            const bottomCell = newGrid[row + 1][col] || {
-              type: null,
-              hasCar: false,
-            };
-            if (!bottomCell.type) {
-              // Only if empty
-              // FIX: Make the neighbor also a multilane road, but secondary
-              bottomCell.type = "road_multilane_horizontal";
-              bottomCell.lanePosition = 1; // Secondary (Bottom)
-              newGrid[row + 1][col] = bottomCell;
+          for (let i = 0; i < laneCount; i++) {
+            if (row + i < rows) {
+              const cell = newGrid[row + i][col] || {
+                type: null,
+                hasCar: false,
+              };
+              cell.type = newItemOrType;
+              cell.laneCount = laneCount;
+              cell.lanePosition = i;
+              newGrid[row + i][col] = cell;
             }
           }
         }
@@ -1430,7 +1451,7 @@ export default function App() {
       });
       setStep((s) => s + 1);
     },
-    [step, selectedTool, isPlaying, rows, cols]
+    [step, selectedTool, isPlaying, rows, cols, toolLaneCount]
   );
 
   const updateTrafficLightConfig = (row, col, key, value) => {
@@ -1471,20 +1492,59 @@ export default function App() {
     setStep((s) => s + 1);
   };
 
-  // NEW: Update Lane Count setting
+  // NEW: Update Lane Count setting with Grid Expansion/Contraction
   const updateLaneCount = (row, col, delta) => {
     setHistory((prev) => {
       const current = prev[step];
       const newGrid = current.map((r) =>
         r.map((cell) => (cell ? { ...cell } : null))
       );
-      if (newGrid[row][col] && newGrid[row][col].type.includes("multilane")) {
-        const currentLanes = newGrid[row][col].laneCount || 2;
-        const newLanes = Math.max(2, Math.min(6, currentLanes + delta)); // Min 2, Max 6
-        newGrid[row][col].laneCount = newLanes;
 
-        // NOTE: Actual grid expansion logic (adding more adjacent tiles) would ideally happen here,
-        // but for this MVP we are just storing the setting. The user requested 2 lanes for now.
+      const targetCell = newGrid[row][col];
+      if (targetCell && targetCell.type.includes("multilane")) {
+        const currentLanes = targetCell.laneCount || 2;
+        const currentPos = targetCell.lanePosition || 0;
+        const newLanes = Math.max(2, Math.min(6, currentLanes + delta)); // Min 2, Max 6
+
+        if (newLanes === currentLanes) return prev; // No change
+
+        // 1. Find the "Base" (Lane 0) coordinates
+        let baseR = row;
+        let baseC = col;
+        const isVertical = targetCell.type.includes("vertical");
+
+        if (isVertical) baseC = col - currentPos;
+        else baseR = row - currentPos;
+
+        // 2. Re-draw the lanes based on new count
+        for (let i = 0; i < Math.max(currentLanes, newLanes); i++) {
+          const r = isVertical ? baseR : baseR + i;
+          const c = isVertical ? baseC + i : baseC;
+
+          if (r >= 0 && r < rows && c >= 0 && c < cols) {
+            if (i < newLanes) {
+              // Update/Create Lane
+              const cell = newGrid[r][c] || { type: null, hasCar: false };
+              cell.type = targetCell.type;
+              cell.laneCount = newLanes;
+              cell.lanePosition = i;
+              // Preserve config if it existed
+              if (!cell.flowDirection && targetCell.flowDirection)
+                cell.flowDirection = targetCell.flowDirection;
+              newGrid[r][c] = cell;
+            } else {
+              // Delete Lane (Contraction)
+              // Only delete if it's actually part of this road group
+              if (
+                newGrid[r][c] &&
+                newGrid[r][c].type === targetCell.type &&
+                newGrid[r][c].lanePosition === i
+              ) {
+                newGrid[r][c] = null;
+              }
+            }
+          }
+        }
       }
       return [...prev.slice(0, step + 1), newGrid];
     });
@@ -1535,6 +1595,39 @@ export default function App() {
         const currentCell = newGrid[r][c];
 
         if (currentCell && currentCell.type.startsWith("road")) {
+          // --- 1. LANE HOPPING (Treat Multi-lane as one entity) ---
+          if (currentCell.type.includes("multilane")) {
+            // Iterate through ALL lanes in this group
+            const laneCount = currentCell.laneCount || 2;
+            const currentPos = currentCell.lanePosition || 0;
+            const isVertical = currentCell.type.includes("vertical");
+
+            // Calculate Base (Lane 0)
+            const baseR = isVertical ? r : r - currentPos;
+            const baseC = isVertical ? c - currentPos : c;
+
+            // Add all siblings to queue
+            for (let i = 0; i < laneCount; i++) {
+              if (i === currentPos) continue; // Skip self
+
+              const siblingR = isVertical ? baseR : baseR + i;
+              const siblingC = isVertical ? baseC + i : baseC;
+
+              const siblingKey = `${siblingR},${siblingC}`;
+              if (
+                !visited.has(siblingKey) &&
+                siblingR >= 0 &&
+                siblingR < rows &&
+                siblingC >= 0 &&
+                siblingC < cols &&
+                newGrid[siblingR][siblingC] &&
+                newGrid[siblingR][siblingC].type === currentCell.type
+              ) {
+                queue.push([siblingR, siblingC, currDir]);
+              }
+            }
+          }
+
           if (currentCell.type === "road_intersection") {
             currentCell.flowDirection = null;
 
@@ -1737,6 +1830,46 @@ export default function App() {
           </div>
 
           <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
+            {/* Tool Settings Panel (When no cell selected, but Multi-Lane Tool is active) */}
+            {!selectedCell &&
+              selectedTool &&
+              selectedTool.includes("multilane") && (
+                <div className="mb-6 p-4 bg-slate-800 rounded-xl border-l-4 border-slate-400 shadow-md animate-fadeIn">
+                  <div className="flex justify-between items-center mb-3">
+                    <h2 className="text-sm font-bold text-white uppercase tracking-wider">
+                      🛠️ Tool Settings
+                    </h2>
+                  </div>
+                  <div className="flex justify-between items-center text-xs">
+                    <span className="text-slate-300">Lanes to Place:</span>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() =>
+                          setToolLaneCount(Math.max(2, toolLaneCount - 1))
+                        }
+                        className="w-6 h-6 bg-slate-700 rounded text-white hover:bg-slate-600"
+                      >
+                        -
+                      </button>
+                      <span className="font-bold text-white">
+                        {toolLaneCount}
+                      </span>
+                      <button
+                        onClick={() =>
+                          setToolLaneCount(Math.min(6, toolLaneCount + 1))
+                        }
+                        className="w-6 h-6 bg-slate-700 rounded text-white hover:bg-slate-600"
+                      >
+                        +
+                      </button>
+                    </div>
+                  </div>
+                  <div className="mt-2 text-[10px] text-slate-500">
+                    Click on the grid to place a {toolLaneCount}-lane road.
+                  </div>
+                </div>
+              )}
+
             {/* Properties Panel: Multi-Lane Road Settings (NEW) */}
             {selectedCell &&
               selectedCellData &&
