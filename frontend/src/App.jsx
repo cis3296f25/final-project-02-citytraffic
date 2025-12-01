@@ -1847,7 +1847,8 @@ export default function App() {
                         onClick={() =>
                           setToolLaneCount(Math.max(2, toolLaneCount - 1))
                         }
-                        className="w-6 h-6 bg-slate-700 rounded text-white hover:bg-slate-600"
+                        // ADDED: flex items-center justify-center
+                        className="w-6 h-6 bg-slate-700 rounded text-white hover:bg-slate-600 flex items-center justify-center"
                       >
                         -
                       </button>
@@ -1858,7 +1859,8 @@ export default function App() {
                         onClick={() =>
                           setToolLaneCount(Math.min(6, toolLaneCount + 1))
                         }
-                        className="w-6 h-6 bg-slate-700 rounded text-white hover:bg-slate-600"
+                        // ADDED: flex items-center justify-center
+                        className="w-6 h-6 bg-slate-700 rounded text-white hover:bg-slate-600 flex items-center justify-center"
                       >
                         +
                       </button>
@@ -1898,7 +1900,8 @@ export default function App() {
                             -1
                           )
                         }
-                        className="w-6 h-6 bg-slate-700 rounded text-white hover:bg-slate-600"
+                        // ADDED: flex items-center justify-center
+                        className="w-6 h-6 bg-slate-700 rounded text-white hover:bg-slate-600 flex items-center justify-center"
                       >
                         -
                       </button>
@@ -1909,7 +1912,8 @@ export default function App() {
                         onClick={() =>
                           updateLaneCount(selectedCell.row, selectedCell.col, 1)
                         }
-                        className="w-6 h-6 bg-slate-700 rounded text-white hover:bg-slate-600"
+                        // ADDED: flex items-center justify-center
+                        className="w-6 h-6 bg-slate-700 rounded text-white hover:bg-slate-600 flex items-center justify-center"
                       >
                         +
                       </button>
