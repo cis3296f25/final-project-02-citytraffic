@@ -1,21 +1,41 @@
 /**
- * FILE PURPOSE:
- * Stores global constants, configuration settings, and palette definitions used across the app.
- *
- * CONTENTS:
- * - Grid Dimensions: Defines the pixel size of the game board.
- * - Palette Arrays: Defines the tools available in the sidebar (Main, Roads, Decorations, etc.).
- *
- * DEPENDENCIES:
- * - None.
+ * FILE: src/constants.js
  */
 
 // --- Grid Configuration ---
-export const TOTAL_GRID_WIDTH_PX = 19 * 64; // 1216px
-export const TOTAL_GRID_HEIGHT_PX = 12 * 64; // 768px
+export const BASE_GRID_WIDTH_PX = 19 * 64; // 1216px
+export const BASE_GRID_HEIGHT_PX = 12 * 64; // 768px
+export const ASPECT_RATIO = BASE_GRID_WIDTH_PX / BASE_GRID_HEIGHT_PX;
+
+// --- EXPORT ALIASES (Required to fix your error) ---
+export const TOTAL_GRID_WIDTH_PX = BASE_GRID_WIDTH_PX;
+export const TOTAL_GRID_HEIGHT_PX = BASE_GRID_HEIGHT_PX;
+
+// --- Theme Configuration ---
+export const THEMES = {
+  dark: {
+    bgApp: "bg-slate-950",
+    textMain: "text-slate-200",
+    textDim: "text-slate-400",
+    panelBg: "bg-slate-900",
+    panelBorder: "border-slate-800",
+    gridBg: "bg-slate-100/50",
+    gridPattern: "radial-gradient(#cbd5e1 1px, transparent 1px)",
+    sidebarBg: "bg-slate-900/95",
+  },
+  light: {
+    bgApp: "bg-slate-100",
+    textMain: "text-slate-800",
+    textDim: "text-slate-500",
+    panelBg: "bg-white",
+    panelBorder: "border-slate-200",
+    gridBg: "bg-white/80",
+    gridPattern: "radial-gradient(#94a3b8 1px, transparent 1px)",
+    sidebarBg: "bg-white/95",
+  },
+};
 
 // --- Palette Definitions ---
-
 export const MAIN_PALETTE_ITEMS = [
   {
     type: "select",
@@ -97,7 +117,7 @@ export const ROAD_PALETTE_ITEMS = [
   {
     type: "road_divider_vertical",
     label: "Divider Vert",
-    emoji: " ⎸",
+    emoji: "⎸",
     color: "from-yellow-600 to-yellow-500",
   },
   {

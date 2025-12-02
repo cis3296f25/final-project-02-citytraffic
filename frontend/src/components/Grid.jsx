@@ -3,22 +3,21 @@
  * Renders the interactive game grid and individual cells.
  *
  * CONTENTS:
- * - Grid: The container component. It calculates cell dimensions based on the total pixels defined in constants.
- * It also handles the "neighbor logic" to determine if a road should connect to adjacent cells.
- * - GridCell: The individual square component. Handles drag-and-drop events, clicks (painting), and context menus (right-click).
+ * - Grid: The container component. It handles the "neighbor logic" to connect roads and applies the visual theme (background/dots).
+ * - GridCell: The individual square component. Handles drag-and-drop, clicks, and context menus.
  *
  * DEPENDENCIES:
- * - renderCellContent (from utils/renderHelpers): Handles the inner SVG graphics.
- * - Constants: TOTAL_GRID_WIDTH_PX, TOTAL_GRID_HEIGHT_PX.
- *
- * NEW COMPONENTS YOU CAN ADD HERE:
- * - GridOverlay: If you want to show a grid overlay (toggleable lines) on top of the map.
- * - HoverHighlighter: A separate component to handle the hover state visuals if they get too complex for CSS.
+ * - renderCellContent (SVG Logic)
+ * - Constants (Dimensions and Themes)
  */
 
 import React from "react";
 import { renderCellContent } from "../utils/renderHelpers";
-import { TOTAL_GRID_WIDTH_PX, TOTAL_GRID_HEIGHT_PX } from "../constants";
+import {
+  TOTAL_GRID_WIDTH_PX,
+  TOTAL_GRID_HEIGHT_PX,
+  THEMES,
+} from "../constants";
 
 // --- Grid Cell Component ---
 const GridCell = React.memo(
@@ -88,8 +87,9 @@ export const Grid = ({
   setIsMouseDown,
   onRightClick,
   selectedCell,
+  theme = "dark", // Default theme
 }) => {
-  // CRITICAL FIX: Guard clause to prevent crash if grid is undefined
+  // Guard clause to prevent crash if grid is undefined
   if (!grid) {
     return (
       <div className="flex items-center justify-center h-full text-slate-500">
@@ -101,9 +101,13 @@ export const Grid = ({
   const cellWidth = TOTAL_GRID_WIDTH_PX / cols;
   const cellHeight = TOTAL_GRID_HEIGHT_PX / rows;
 
-  // --- Neighbor Detection Helpers ---
-  // These helpers determine if a neighbor is a specific type of road to auto-connect textures.
+  // Determine styles based on theme
+  const currentTheme = THEMES?.[theme] || THEMES.dark;
+  const gridBgClass = currentTheme.gridBg || "bg-slate-100/50";
+  const gridPattern =
+    currentTheme.gridPattern || "radial-gradient(#cbd5e1 1px, transparent 1px)";
 
+  // --- Neighbor Detection Helpers ---
   const getIsVerticalRoad = (r, c) =>
     r >= 0 &&
     r < rows &&
@@ -140,12 +144,12 @@ export const Grid = ({
       onMouseDown={() => setIsMouseDown(true)}
       onMouseUp={() => setIsMouseDown(false)}
       onMouseLeave={() => setIsMouseDown(false)}
-      className="relative bg-slate-100/50 shadow-2xl rounded-sm overflow-hidden flex-shrink-0"
+      className={`relative shadow-2xl rounded-sm overflow-hidden flex-shrink-0 transition-colors duration-300 ${gridBgClass}`}
       style={{
         userSelect: "none",
         width: `${TOTAL_GRID_WIDTH_PX}px`,
         height: `${TOTAL_GRID_HEIGHT_PX}px`,
-        backgroundImage: "radial-gradient(#cbd5e1 1px, transparent 1px)",
+        backgroundImage: gridPattern,
         backgroundSize: `${cellWidth}px ${cellHeight}px`,
       }}
     >
@@ -159,7 +163,7 @@ export const Grid = ({
             right: false,
           };
 
-          // Enhanced neighbor checks to support both standard and multilane roads connecting
+          // Enhanced neighbor checks for intersections
           if (cellType === "road_intersection") {
             neighborInfo = {
               up:
@@ -176,8 +180,7 @@ export const Grid = ({
                 getIsIntersection(rowIndex, colIndex + 1),
             };
           }
-
-          // Standard road checks
+          // Vertical Roads
           else if (cellType && cellType.includes("vertical")) {
             neighborInfo = {
               up:
@@ -189,7 +192,9 @@ export const Grid = ({
               left: false,
               right: false,
             };
-          } else if (cellType && cellType.includes("horizontal")) {
+          }
+          // Horizontal Roads
+          else if (cellType && cellType.includes("horizontal")) {
             neighborInfo = {
               up: false,
               down: false,

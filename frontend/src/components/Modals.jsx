@@ -3,13 +3,13 @@
  * Contains the overlay modal components for the application.
  *
  * CONTENTS:
- * - UserProfileModal: Handles user account management (Email update, Password reset, Logout).
- * - SaveLoadModal: Handles CRUD operations for city layouts using Firebase Firestore.
+ * - UserProfileModal: Handles account settings AND application settings (Theme/Grid Size).
+ * - SaveLoadModal: Handles saving and loading city layouts.
  *
- * DEPENDENCIES:
- * - Firebase Firestore (for saving/loading grids)
- * - Firebase Auth (for user management)
- * - ./Icons (for UI elements)
+ * CHANGES:
+ * - Added 'Settings' tab to UserProfileModal.
+ * - Implemented Light/Dark mode styling conditionals.
+ * - Added Grid Scale control.
  */
 
 import React, { useState, useEffect } from "react";
@@ -31,19 +31,35 @@ import {
 } from "firebase/auth";
 import { UserIcon, XIcon, SaveIcon, LoadIcon, TrashIcon } from "./Icons";
 
-// --- User Profile Modal (With Logout) ---
-export const UserProfileModal = ({ user, onClose }) => {
+// --- User Profile Modal (With Settings) ---
+export const UserProfileModal = ({
+  user,
+  onClose,
+  theme = "dark", // Default to dark if not provided
+  setTheme,
+  gridScale = 1,
+  setGridScale,
+}) => {
   const [activeTab, setActiveTab] = useState("profile");
   const [newEmail, setNewEmail] = useState("");
   const [currentPassword, setCurrentPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [status, setStatus] = useState({ type: null, message: null });
 
+  // Reset inputs when switching tabs
   useEffect(() => {
     setStatus({ type: null, message: null });
     setNewEmail("");
     setCurrentPassword("");
   }, [activeTab]);
+
+  // Helper for conditional classes
+  const isDark = theme === "dark";
+  const bgClass = isDark ? "bg-slate-900" : "bg-white";
+  const borderClass = isDark ? "border-slate-700" : "border-slate-200";
+  const textClass = isDark ? "text-white" : "text-slate-900";
+  const textDimClass = isDark ? "text-slate-400" : "text-slate-500";
+  const inputBgClass = isDark ? "bg-slate-950" : "bg-slate-50";
 
   const handleUpdateEmail = async (e) => {
     e.preventDefault();
@@ -104,51 +120,61 @@ export const UserProfileModal = ({ user, onClose }) => {
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fadeIn">
-      <div className="bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col max-h-[90vh]">
+      <div
+        className={`border rounded-2xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col max-h-[90vh] transition-colors duration-300 ${bgClass} ${borderClass}`}
+      >
         {/* Header */}
-        <div className="p-4 border-b border-slate-800 flex justify-between items-center bg-slate-800/50">
-          <h2 className="text-lg font-bold text-white flex items-center gap-2">
-            <div className="p-1.5 bg-blue-500/20 rounded-lg text-blue-400">
+        <div
+          className={`p-4 border-b flex justify-between items-center ${
+            isDark
+              ? "border-slate-800 bg-slate-800/50"
+              : "border-slate-100 bg-slate-50"
+          }`}
+        >
+          <h2
+            className={`text-lg font-bold flex items-center gap-2 ${textClass}`}
+          >
+            <div className="p-1.5 bg-blue-500/20 rounded-lg text-blue-500">
               <UserIcon />
             </div>
-            Account Settings
+            Settings & Account
           </h2>
           <button
             onClick={onClose}
-            className="p-1 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-white transition-colors"
+            className={`p-1 rounded-lg transition-colors ${
+              isDark
+                ? "text-slate-400 hover:text-white hover:bg-slate-800"
+                : "text-slate-400 hover:text-slate-600 hover:bg-slate-100"
+            }`}
           >
             <XIcon />
           </button>
         </div>
 
         {/* Tabs */}
-        <div className="flex border-b border-slate-800">
-          <button
-            onClick={() => setActiveTab("profile")}
-            className={`flex-1 py-3 text-sm font-medium transition-colors relative ${
-              activeTab === "profile"
-                ? "text-blue-400 bg-slate-800/30"
-                : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/50"
-            }`}
-          >
-            Profile
-            {activeTab === "profile" && (
-              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-500"></div>
-            )}
-          </button>
-          <button
-            onClick={() => setActiveTab("security")}
-            className={`flex-1 py-3 text-sm font-medium transition-colors relative ${
-              activeTab === "security"
-                ? "text-blue-400 bg-slate-800/30"
-                : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/50"
-            }`}
-          >
-            Security
-            {activeTab === "security" && (
-              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-500"></div>
-            )}
-          </button>
+        <div
+          className={`flex border-b ${
+            isDark ? "border-slate-800" : "border-slate-100"
+          }`}
+        >
+          {["profile", "settings", "security"].map((tab) => (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={`flex-1 py-3 text-sm font-medium transition-colors relative capitalize ${
+                activeTab === tab
+                  ? "text-blue-500 bg-blue-500/5"
+                  : isDark
+                  ? "text-slate-400 hover:text-slate-200 hover:bg-slate-800/50"
+                  : "text-slate-500 hover:text-slate-700 hover:bg-slate-50"
+              }`}
+            >
+              {tab}
+              {activeTab === tab && (
+                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-500"></div>
+              )}
+            </button>
+          ))}
         </div>
 
         {/* Body */}
@@ -157,8 +183,8 @@ export const UserProfileModal = ({ user, onClose }) => {
             <div
               className={`mb-6 p-3 rounded-lg border text-xs font-medium flex items-center gap-2 ${
                 status.type === "success"
-                  ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
-                  : "bg-red-500/10 border-red-500/20 text-red-400"
+                  ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-500"
+                  : "bg-red-500/10 border-red-500/20 text-red-500"
               }`}
             >
               <span>{status.type === "success" ? "✅" : "⚠️"}</span>
@@ -166,31 +192,52 @@ export const UserProfileModal = ({ user, onClose }) => {
             </div>
           )}
 
+          {/* TAB: PROFILE */}
           {activeTab === "profile" && (
             <div className="space-y-6 animate-fadeIn">
-              <div className="flex items-center gap-4 p-4 bg-slate-800 rounded-xl border border-slate-700">
+              <div
+                className={`flex items-center gap-4 p-4 rounded-xl border ${
+                  isDark
+                    ? "bg-slate-800 border-slate-700"
+                    : "bg-slate-50 border-slate-200"
+                }`}
+              >
                 <div className="w-14 h-14 rounded-full bg-gradient-to-br from-blue-600 to-cyan-500 flex items-center justify-center text-xl font-bold text-white shadow-lg">
                   {user.email ? user.email[0].toUpperCase() : "U"}
                 </div>
                 <div className="min-w-0">
-                  <div className="text-white font-bold truncate text-sm">
+                  <div className={`font-bold truncate text-sm ${textClass}`}>
                     {user.email}
                   </div>
-                  <div className="text-[10px] text-slate-500 font-mono truncate max-w-[200px] mt-0.5">
+                  <div
+                    className={`text-[10px] font-mono truncate max-w-[200px] mt-0.5 ${textDimClass}`}
+                  >
                     ID: {user.uid}
                   </div>
                 </div>
               </div>
 
-              <div className="p-5 bg-slate-800 rounded-xl border border-slate-700">
+              <div
+                className={`p-5 rounded-xl border ${
+                  isDark
+                    ? "bg-slate-800 border-slate-700"
+                    : "bg-white border-slate-200 shadow-sm"
+                }`}
+              >
                 <div className="flex items-center gap-3 mb-4">
-                  <div className="p-2 bg-slate-950 rounded text-lg">📧</div>
+                  <div
+                    className={`p-2 rounded text-lg ${
+                      isDark ? "bg-slate-950" : "bg-slate-100"
+                    }`}
+                  >
+                    📧
+                  </div>
                   <div>
-                    <h3 className="text-white font-bold text-sm">
+                    <h3 className={`font-bold text-sm ${textClass}`}>
                       Update Email
                     </h3>
-                    <p className="text-[10px] text-slate-400">
-                      Confirmation sent to new address.
+                    <p className={`text-[10px] ${textDimClass}`}>
+                      Confirmation required.
                     </p>
                   </div>
                 </div>
@@ -200,30 +247,33 @@ export const UserProfileModal = ({ user, onClose }) => {
                     value={newEmail}
                     onChange={(e) => setNewEmail(e.target.value)}
                     placeholder="New Email Address"
-                    className="w-full bg-slate-950 border border-slate-600 rounded-lg p-2.5 text-sm text-white placeholder-slate-500 focus:ring-1 focus:ring-blue-500 outline-none"
+                    className={`w-full border rounded-lg p-2.5 text-sm placeholder-slate-500 focus:ring-1 focus:ring-blue-500 outline-none ${inputBgClass} ${borderClass} ${textClass}`}
                   />
                   <input
                     type="password"
                     value={currentPassword}
                     onChange={(e) => setCurrentPassword(e.target.value)}
-                    placeholder="Verify Current Password"
-                    className="w-full bg-slate-950 border border-slate-600 rounded-lg p-2.5 text-sm text-white placeholder-slate-500 focus:ring-1 focus:ring-blue-500 outline-none"
+                    placeholder="Current Password"
+                    className={`w-full border rounded-lg p-2.5 text-sm placeholder-slate-500 focus:ring-1 focus:ring-blue-500 outline-none ${inputBgClass} ${borderClass} ${textClass}`}
                   />
                   <button
                     type="submit"
                     disabled={isLoading}
-                    className="w-full py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white rounded-lg font-bold text-xs shadow-lg shadow-blue-900/20"
+                    className="w-full py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white rounded-lg font-bold text-xs shadow-lg shadow-blue-500/20"
                   >
                     {isLoading ? "Sending..." : "Send Verification Link"}
                   </button>
                 </form>
               </div>
 
-              {/* LOGOUT BUTTON */}
-              <div className="pt-2 border-t border-slate-800">
+              <div
+                className={`pt-2 border-t ${
+                  isDark ? "border-slate-800" : "border-slate-200"
+                }`}
+              >
                 <button
                   onClick={handleLogout}
-                  className="w-full py-3 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 rounded-lg font-bold text-sm transition-all flex items-center justify-center gap-2"
+                  className="w-full py-3 bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/20 rounded-lg font-bold text-sm transition-all flex items-center justify-center gap-2"
                 >
                   <svg
                     xmlns="http://www.w3.org/2000/svg"
@@ -246,16 +296,144 @@ export const UserProfileModal = ({ user, onClose }) => {
             </div>
           )}
 
+          {/* TAB: SETTINGS (NEW) */}
+          {activeTab === "settings" && (
+            <div className="space-y-6 animate-fadeIn">
+              {/* Theme Toggle */}
+              <div
+                className={`p-5 rounded-xl border ${
+                  isDark
+                    ? "bg-slate-800 border-slate-700"
+                    : "bg-white border-slate-200 shadow-sm"
+                }`}
+              >
+                <div className="flex items-start gap-4 mb-4">
+                  <div
+                    className={`p-2 rounded text-lg ${
+                      isDark ? "bg-slate-950" : "bg-slate-100"
+                    }`}
+                  >
+                    🎨
+                  </div>
+                  <div>
+                    <h3 className={`font-bold text-sm ${textClass}`}>
+                      Visual Theme
+                    </h3>
+                    <p className={`text-[10px] ${textDimClass}`}>
+                      Toggle between light and dark mode.
+                    </p>
+                  </div>
+                </div>
+
+                <div
+                  className={`flex gap-2 p-1 rounded-lg ${
+                    isDark ? "bg-slate-950" : "bg-slate-100"
+                  }`}
+                >
+                  <button
+                    onClick={() => setTheme && setTheme("light")}
+                    className={`flex-1 py-2 rounded-md text-xs font-bold transition-all ${
+                      theme === "light"
+                        ? "bg-white text-blue-600 shadow-sm"
+                        : "text-slate-400 hover:text-slate-500"
+                    }`}
+                  >
+                    ☀️ Light
+                  </button>
+                  <button
+                    onClick={() => setTheme && setTheme("dark")}
+                    className={`flex-1 py-2 rounded-md text-xs font-bold transition-all ${
+                      theme === "dark"
+                        ? "bg-slate-700 text-blue-400 shadow-sm"
+                        : "text-slate-400 hover:text-slate-600"
+                    }`}
+                  >
+                    🌙 Dark
+                  </button>
+                </div>
+              </div>
+
+              {/* Grid Size Slider */}
+              <div
+                className={`p-5 rounded-xl border ${
+                  isDark
+                    ? "bg-slate-800 border-slate-700"
+                    : "bg-white border-slate-200 shadow-sm"
+                }`}
+              >
+                <div className="flex items-start gap-4 mb-4">
+                  <div
+                    className={`p-2 rounded text-lg ${
+                      isDark ? "bg-slate-950" : "bg-slate-100"
+                    }`}
+                  >
+                    🔍
+                  </div>
+                  <div>
+                    <h3 className={`font-bold text-sm ${textClass}`}>
+                      Grid Scale
+                    </h3>
+                    <p className={`text-[10px] ${textDimClass}`}>
+                      Adjust the zoom level of the workspace.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <span className={`text-xs font-mono ${textDimClass}`}>
+                    50%
+                  </span>
+                  <input
+                    type="range"
+                    min="0.5"
+                    max="2.0"
+                    step="0.1"
+                    value={gridScale}
+                    onChange={(e) =>
+                      setGridScale && setGridScale(parseFloat(e.target.value))
+                    }
+                    className={`flex-1 h-1 rounded-lg appearance-none cursor-pointer accent-blue-500 ${
+                      isDark ? "bg-slate-600" : "bg-slate-300"
+                    }`}
+                  />
+                  <span className={`text-xs font-mono ${textDimClass}`}>
+                    200%
+                  </span>
+                </div>
+                <div
+                  className={`text-center mt-2 text-xs font-mono font-bold ${
+                    isDark ? "text-blue-400" : "text-blue-600"
+                  }`}
+                >
+                  {Math.round(gridScale * 100)}%
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* TAB: SECURITY */}
           {activeTab === "security" && (
             <div className="space-y-6 animate-fadeIn">
-              <div className="p-5 bg-slate-800 rounded-xl border border-slate-700">
+              <div
+                className={`p-5 rounded-xl border ${
+                  isDark
+                    ? "bg-slate-800 border-slate-700"
+                    : "bg-white border-slate-200 shadow-sm"
+                }`}
+              >
                 <div className="flex items-start gap-4">
-                  <div className="p-2 bg-slate-950 rounded text-lg">🔒</div>
+                  <div
+                    className={`p-2 rounded text-lg ${
+                      isDark ? "bg-slate-950" : "bg-slate-100"
+                    }`}
+                  >
+                    🔒
+                  </div>
                   <div>
-                    <h3 className="text-white font-bold text-sm">
+                    <h3 className={`font-bold text-sm ${textClass}`}>
                       Reset Password
                     </h3>
-                    <p className="text-[10px] text-slate-400 mt-1">
+                    <p className={`text-[10px] mt-1 ${textDimClass}`}>
                       Link sent to {user.email}
                     </p>
                   </div>
@@ -263,7 +441,11 @@ export const UserProfileModal = ({ user, onClose }) => {
                 <button
                   onClick={handlePasswordReset}
                   disabled={isLoading}
-                  className="mt-4 w-full py-2 bg-slate-700 hover:bg-slate-600 text-white border border-slate-600 rounded-lg font-medium text-xs transition-all"
+                  className={`mt-4 w-full py-2 border rounded-lg font-medium text-xs transition-all ${
+                    isDark
+                      ? "bg-slate-700 hover:bg-slate-600 text-white border-slate-600"
+                      : "bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-300"
+                  }`}
                 >
                   {isLoading ? "Sending..." : "Send Password Reset Email"}
                 </button>
@@ -276,7 +458,7 @@ export const UserProfileModal = ({ user, onClose }) => {
   );
 };
 
-// --- Save/Load Modal (Nested Subcollection Version) ---
+// --- Save/Load Modal ---
 export const SaveLoadModal = ({
   mode,
   onClose,
@@ -287,6 +469,7 @@ export const SaveLoadModal = ({
   currentLayoutId,
   setCurrentLayoutId,
   user,
+  theme = "dark", // Prop to control styling
 }) => {
   const [saveName, setSaveName] = useState("");
   const [layouts, setLayouts] = useState([]);
@@ -297,11 +480,18 @@ export const SaveLoadModal = ({
     if (mode === "load") fetchLayouts();
   }, [mode]);
 
-  // FETCH (GET) - From User Subcollection
+  // Helper for conditional classes
+  const isDark = theme === "dark";
+  const bgClass = isDark ? "bg-slate-900" : "bg-white";
+  const borderClass = isDark ? "border-slate-700" : "border-slate-200";
+  const textClass = isDark ? "text-white" : "text-slate-900";
+  const textDimClass = isDark ? "text-slate-400" : "text-slate-500";
+  const inputBgClass = isDark ? "bg-slate-800" : "bg-slate-50";
+
+  // FETCH (GET)
   const fetchLayouts = async () => {
     setLoading(true);
     try {
-      // PATH: users -> UID -> layouts
       const userLayoutsRef = collection(db, "users", user.uid, "layouts");
       const querySnapshot = await getDocs(userLayoutsRef);
 
@@ -317,17 +507,14 @@ export const SaveLoadModal = ({
     setLoading(false);
   };
 
-  // SAVE AS NEW (POST) - To User Subcollection
+  // SAVE AS NEW (POST)
   const handleSaveNew = async () => {
     if (!saveName.trim()) return;
-
     const serializedGrid = JSON.stringify(grid);
 
     try {
-      // PATH: users -> UID -> layouts
       const userLayoutsRef = collection(db, "users", user.uid, "layouts");
-
-      const docRef = await addDoc(userLayoutsRef, {
+      await addDoc(userLayoutsRef, {
         name: saveName,
         description: "",
         rows,
@@ -335,8 +522,7 @@ export const SaveLoadModal = ({
         grid_data: serializedGrid,
         created_at: new Date().toISOString(),
       });
-
-      setCurrentLayoutId(docRef.id);
+      // setCurrentLayoutId(docRef.id); // Optional: Switch to new layout immediately
       onClose();
       alert("Saved as new layout!");
     } catch (e) {
@@ -345,23 +531,19 @@ export const SaveLoadModal = ({
     }
   };
 
-  // OVERWRITE (PUT) - Specific Doc in User Subcollection
+  // OVERWRITE (PUT)
   const handleOverwrite = async () => {
     if (!currentLayoutId) return;
-
     const serializedGrid = JSON.stringify(grid);
 
     try {
-      // PATH: users -> UID -> layouts -> LayoutID
       const layoutRef = doc(db, "users", user.uid, "layouts", currentLayoutId);
-
       await updateDoc(layoutRef, {
         rows,
         cols,
         grid_data: serializedGrid,
         updated_at: new Date().toISOString(),
       });
-
       onClose();
       alert("Layout overwritten successfully!");
     } catch (e) {
@@ -370,11 +552,10 @@ export const SaveLoadModal = ({
     }
   };
 
-  // DELETE (DELETE) - Specific Doc in User Subcollection
+  // DELETE (DELETE)
   const handleDelete = async (id) => {
     if (!confirm("Delete this layout?")) return;
     try {
-      // PATH: users -> UID -> layouts -> LayoutID
       await deleteDoc(doc(db, "users", user.uid, "layouts", id));
       setLayouts((prev) => prev.filter((l) => l.id !== id));
       if (id === currentLayoutId) setCurrentLayoutId(null);
@@ -386,10 +567,20 @@ export const SaveLoadModal = ({
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fadeIn">
-      <div className="bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col max-h-[80vh]">
+      <div
+        className={`border rounded-2xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col max-h-[80vh] transition-colors duration-300 ${bgClass} ${borderClass}`}
+      >
         {/* Header */}
-        <div className="p-4 border-b border-slate-800 flex justify-between items-center bg-slate-800/50">
-          <h2 className="text-lg font-bold text-white flex items-center gap-2">
+        <div
+          className={`p-4 border-b flex justify-between items-center ${
+            isDark
+              ? "border-slate-800 bg-slate-800/50"
+              : "border-slate-100 bg-slate-50"
+          }`}
+        >
+          <h2
+            className={`text-lg font-bold flex items-center gap-2 ${textClass}`}
+          >
             {mode === "save" ? (
               <>
                 <SaveIcon /> Save Layout
@@ -402,7 +593,11 @@ export const SaveLoadModal = ({
           </h2>
           <button
             onClick={onClose}
-            className="text-slate-400 hover:text-white transition-colors"
+            className={`transition-colors ${
+              isDark
+                ? "text-slate-400 hover:text-white"
+                : "text-slate-400 hover:text-slate-600"
+            }`}
           >
             <XIcon />
           </button>
@@ -420,8 +615,8 @@ export const SaveLoadModal = ({
             <div className="space-y-6">
               {/* Option 1: Overwrite */}
               {currentLayoutId && (
-                <div className="p-4 bg-emerald-900/20 border border-emerald-500/30 rounded-lg">
-                  <div className="text-xs font-bold text-emerald-400 uppercase mb-2">
+                <div className="p-4 bg-emerald-500/10 border border-emerald-500/30 rounded-lg">
+                  <div className="text-xs font-bold text-emerald-500 uppercase mb-2">
                     Current Layout Loaded
                   </div>
                   <button
@@ -434,16 +629,28 @@ export const SaveLoadModal = ({
               )}
 
               {currentLayoutId && (
-                <div className="flex items-center gap-2 text-slate-500 text-xs uppercase font-bold">
-                  <div className="h-px bg-slate-700 flex-1"></div>
+                <div
+                  className={`flex items-center gap-2 text-xs uppercase font-bold ${textDimClass}`}
+                >
+                  <div
+                    className={`h-px flex-1 ${
+                      isDark ? "bg-slate-700" : "bg-slate-200"
+                    }`}
+                  ></div>
                   OR
-                  <div className="h-px bg-slate-700 flex-1"></div>
+                  <div
+                    className={`h-px flex-1 ${
+                      isDark ? "bg-slate-700" : "bg-slate-200"
+                    }`}
+                  ></div>
                 </div>
               )}
 
               {/* Option 2: Save As New */}
               <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">
+                <label
+                  className={`block text-xs font-bold uppercase mb-1 ${textDimClass}`}
+                >
                   {currentLayoutId ? "Save as New Layout" : "Layout Name"}
                 </label>
                 <input
@@ -451,12 +658,12 @@ export const SaveLoadModal = ({
                   value={saveName}
                   onChange={(e) => setSaveName(e.target.value)}
                   placeholder="My New City"
-                  className="w-full bg-slate-800 border border-slate-600 rounded-lg p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none mb-3"
+                  className={`w-full border rounded-lg p-3 focus:ring-2 focus:ring-blue-500 outline-none mb-3 ${inputBgClass} ${borderClass} ${textClass}`}
                   autoFocus={!currentLayoutId}
                 />
                 <button
                   onClick={handleSaveNew}
-                  className="w-full py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-bold transition-all shadow-lg shadow-blue-900/20"
+                  className="w-full py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-bold transition-all shadow-lg shadow-blue-500/20"
                 >
                   {currentLayoutId ? "Save Copy" : "Save Layout"}
                 </button>
@@ -466,11 +673,11 @@ export const SaveLoadModal = ({
             // LOAD MODE
             <div className="space-y-3">
               {loading ? (
-                <div className="text-center text-slate-500 py-4">
+                <div className={`text-center py-4 ${textDimClass}`}>
                   Loading...
                 </div>
               ) : layouts.length === 0 ? (
-                <div className="text-center text-slate-500 py-4">
+                <div className={`text-center py-4 ${textDimClass}`}>
                   No saved layouts found.
                 </div>
               ) : (
@@ -479,20 +686,22 @@ export const SaveLoadModal = ({
                     key={layout.id}
                     className={`group flex justify-between items-center p-3 rounded-lg border transition-all ${
                       currentLayoutId === layout.id
-                        ? "bg-blue-900/20 border-blue-500/50"
-                        : "bg-slate-800 border-slate-700 hover:border-blue-500/50 hover:bg-slate-750"
+                        ? "bg-blue-500/10 border-blue-500/50"
+                        : isDark
+                        ? "bg-slate-800 border-slate-700 hover:border-blue-500/50 hover:bg-slate-750"
+                        : "bg-white border-slate-200 hover:border-blue-500/50 hover:bg-slate-50"
                     }`}
                   >
                     <div className="min-w-0">
-                      <div className="font-bold text-slate-200 truncate">
+                      <div className={`font-bold truncate ${textClass}`}>
                         {layout.name}
                         {currentLayoutId === layout.id && (
-                          <span className="ml-2 text-[10px] text-blue-400 uppercase tracking-wider">
+                          <span className="ml-2 text-[10px] text-blue-500 uppercase tracking-wider">
                             (Active)
                           </span>
                         )}
                       </div>
-                      <div className="text-[10px] text-slate-500">
+                      <div className={`text-[10px] ${textDimClass}`}>
                         {layout.created_at
                           ? new Date(layout.created_at).toLocaleDateString()
                           : "Unknown Date"}{" "}
@@ -510,14 +719,14 @@ export const SaveLoadModal = ({
                           );
                           onClose();
                         }}
-                        className="p-2 bg-blue-600/20 text-blue-400 hover:bg-blue-600 hover:text-white rounded transition-colors"
+                        className="p-2 bg-blue-500/10 text-blue-500 hover:bg-blue-600 hover:text-white rounded transition-colors"
                         title="Load"
                       >
                         <LoadIcon />
                       </button>
                       <button
                         onClick={() => handleDelete(layout.id)}
-                        className="p-2 bg-red-600/20 text-red-400 hover:bg-red-600 hover:text-white rounded transition-colors"
+                        className="p-2 bg-red-500/10 text-red-500 hover:bg-red-600 hover:text-white rounded transition-colors"
                         title="Delete"
                       >
                         <TrashIcon />

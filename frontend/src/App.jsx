@@ -7,6 +7,7 @@
  * - Runs the Simulation Loop (Traffic logic, Car movement).
  * - Handles User Interactions (Clicking, Dragging, Key presses).
  * - Orchestrates the layout of the Sidebar and Main Stage.
+ * - Manages Themes (Light/Dark) and View Scale.
  *
  * DEPENDENCIES:
  * - ./components/* (UI Building Blocks)
@@ -41,6 +42,7 @@ import {
   ROAD_PALETTE_ITEMS,
   DECORATION_PALETTE_ITEMS,
   RANDOM_PALETTE_ITEMS,
+  THEMES, // Ensure this is exported in constants.js
 } from "./constants";
 
 // --- Helper Functions ---
@@ -68,8 +70,13 @@ export default function App() {
   const [selectedCell, setSelectedCell] = useState(null);
   const [currentLayoutId, setCurrentLayoutId] = useState(null);
   const [toolLaneCount, setToolLaneCount] = useState(2);
-  const [autoSpawnEnabled, setAutoSpawnEnabled] = useState(true);
   const [activeModal, setActiveModal] = useState(null); // 'save', 'load', 'profile'
+
+  // --- STATE: Settings & Config ---
+  const [autoSpawnEnabled, setAutoSpawnEnabled] = useState(false); // Default: OFF
+  const [spawnRate, setSpawnRate] = useState(5); // 1-10
+  const [theme, setTheme] = useState("dark"); // 'dark' | 'light'
+  const [gridScale, setGridScale] = useState(1.0); // 0.5 - 2.0
 
   // --- REFS (Simulation Performance) ---
   const globalTickRef = useRef(0);
@@ -77,6 +84,17 @@ export default function App() {
     history: [createEmptyGrid(16, 25)],
     step: 0,
   });
+
+  // Determine current Theme Colors
+  // Fallback objects provided in case constants.js isn't updated yet
+  const T = THEMES?.[theme] || {
+    bgApp: "bg-slate-950",
+    textMain: "text-slate-200",
+    textDim: "text-slate-400",
+    panelBg: "bg-slate-900",
+    panelBorder: "border-slate-800",
+    sidebarBg: "bg-slate-900/95",
+  };
 
   // Safety: Ensure grid is valid
   const grid =
@@ -165,10 +183,32 @@ export default function App() {
       );
       const movedCars = new Set();
 
-      // [Auto-Spawn]
-      if (autoSpawnEnabled && globalTickRef.current % 10 === 0) {
+      // Helper: Check if target accepts entry from direction
+      const isTargetCompatible = (tCell, entryDir) => {
+        if (!tCell) return false;
+        if (tCell.hasCar) return false;
+        if (tCell.type === "traffic_light") return false;
+        if (!tCell.type.startsWith("road")) return false;
+
+        if (tCell.flowDirection) {
+          if (tCell.flowDirection.startsWith("turn_")) {
+            const entry = tCell.flowDirection.split("_")[1];
+            return entryDir === entry;
+          } else {
+            return tCell.flowDirection === entryDir;
+          }
+        }
+        return true;
+      };
+
+      // [Auto-Spawn Logic]
+      const spawnInterval = Math.max(3, 33 - spawnRate * 3);
+
+      if (autoSpawnEnabled && globalTickRef.current % spawnInterval === 0) {
         let attempts = 0;
-        while (attempts < 5) {
+        const maxAttempts = Math.max(3, Math.floor(spawnRate / 2) + 3);
+
+        while (attempts < maxAttempts) {
           const r = Math.floor(Math.random() * rows);
           const c = Math.floor(Math.random() * cols);
           const cell = newGrid[r][c];
@@ -227,9 +267,12 @@ export default function App() {
 
           if (cell.movementProgress < MOVE_THRESHOLD) continue;
 
+          // 1. Determine base direction
           let direction = cell.hasCar;
           const currentFlow = cell.flowDirection;
+          const currentPriority = cell.flowPriority;
 
+          // 2. Strict Flow Override
           if (currentFlow) {
             if (currentFlow === "left" && direction === "right")
               direction = "left";
@@ -239,6 +282,25 @@ export default function App() {
               direction = "up";
             else if (currentFlow === "down" && direction === "up")
               direction = "down";
+          }
+          // 3. Priority Flow Check
+          else if (currentPriority) {
+            let pr = r,
+              pc = c;
+            if (currentPriority === "up") pr--;
+            if (currentPriority === "down") pr++;
+            if (currentPriority === "left") pc--;
+            if (currentPriority === "right") pc++;
+
+            if (
+              pr < 0 ||
+              pr >= rows ||
+              pc < 0 ||
+              pc >= cols ||
+              isTargetCompatible(getCell(newGrid, pr, pc), currentPriority)
+            ) {
+              direction = currentPriority;
+            }
           }
 
           let canMove = false;
@@ -271,23 +333,6 @@ export default function App() {
             const isOffScreen =
               nextR < 0 || nextR >= rows || nextC < 0 || nextC >= cols;
             let tryToTurn = false;
-
-            const isTargetCompatible = (tCell, entryDir) => {
-              if (!tCell) return false;
-              if (tCell.hasCar) return false;
-              if (tCell.type === "traffic_light") return false;
-              if (!tCell.type.startsWith("road")) return false;
-
-              if (tCell.flowDirection) {
-                if (tCell.flowDirection.startsWith("turn_")) {
-                  const entry = tCell.flowDirection.split("_")[1];
-                  return entryDir === entry;
-                } else {
-                  return tCell.flowDirection === entryDir;
-                }
-              }
-              return true;
-            };
 
             if (isOffScreen) {
               canMove = true;
@@ -410,7 +455,7 @@ export default function App() {
         }
       }
 
-      // Memory Management: Truncate history
+      // Memory Management
       let nextHistory = [...curHistory.slice(0, curStep + 1), newGrid];
       if (nextHistory.length > 500) {
         nextHistory = nextHistory.slice(nextHistory.length - 500);
@@ -425,7 +470,7 @@ export default function App() {
     }, SIMULATION_TICK_MS);
 
     return () => clearInterval(interval);
-  }, [isPlaying, rows, cols, autoSpawnEnabled]);
+  }, [isPlaying, rows, cols, autoSpawnEnabled, spawnRate]);
 
   // --- 6. LOGIC: Update Grid ---
   const updateGrid = useCallback(
@@ -573,6 +618,7 @@ export default function App() {
       );
       if (newGrid[row][col] && newGrid[row][col].type.startsWith("road")) {
         newGrid[row][col].flowDirection = direction;
+        newGrid[row][col].flowPriority = null; // Clear priority
       }
       return [...prev.slice(0, step + 1), newGrid];
     });
@@ -707,6 +753,7 @@ export default function App() {
 
           if (currentCell.type === "road_intersection") {
             currentCell.flowDirection = null;
+            currentCell.flowPriority = null;
             const potentialExits = [
               { dr: -1, dc: 0, dir: "up" },
               { dr: 1, dc: 0, dir: "down" },
@@ -731,9 +778,10 @@ export default function App() {
           }
 
           let nextPropDir = currDir;
+          let newFlow = currDir;
+
           if (r !== row || c !== col) {
             const cellType = currentCell.type;
-            let newFlow = currDir;
             if (
               cellType.includes("horizontal") &&
               (currDir === "up" || currDir === "down")
@@ -761,27 +809,10 @@ export default function App() {
                 newFlow = `turn_${currDir}_down`;
               }
             }
-
-            let dr = 0,
-              dc = 0;
-            if (nextPropDir === "up") dr = -1;
-            if (nextPropDir === "down") dr = 1;
-            if (nextPropDir === "left") dc = -1;
-            if (nextPropDir === "right") dc = 1;
-            const nr = r + dr;
-            const nc = c + dc;
-            const isNextCellValid =
-              nr >= 0 &&
-              nr < rows &&
-              nc >= 0 &&
-              nc < cols &&
-              newGrid[nr][nc] &&
-              newGrid[nr][nc].type.startsWith("road");
-
-            if (isNextCellValid) {
-              currentCell.flowDirection = newFlow;
-            } else {
-              currentCell.flowDirection = null;
+          } else {
+            newFlow = direction || null;
+            if (direction && direction.startsWith("turn_")) {
+              nextPropDir = direction.split("_")[2];
             }
           }
 
@@ -792,19 +823,23 @@ export default function App() {
           if (nextPropDir === "left") dc = -1;
           if (nextPropDir === "right") dc = 1;
 
-          if (dr !== 0 || dc !== 0) {
-            const nr = r + dr,
-              nc = c + dc;
-            if (
-              nr >= 0 &&
-              nr < rows &&
-              nc >= 0 &&
-              nc < cols &&
-              newGrid[nr][nc] &&
-              newGrid[nr][nc].type.startsWith("road")
-            ) {
-              queue.push([nr, nc, nextPropDir]);
-            }
+          const nr = r + dr;
+          const nc = c + dc;
+          const isNextCellValid =
+            nr >= 0 &&
+            nr < rows &&
+            nc >= 0 &&
+            nc < cols &&
+            newGrid[nr][nc] &&
+            newGrid[nr][nc].type.startsWith("road");
+
+          if (isNextCellValid) {
+            currentCell.flowDirection = newFlow;
+            currentCell.flowPriority = null;
+            queue.push([nr, nc, nextPropDir]);
+          } else {
+            currentCell.flowDirection = null;
+            currentCell.flowPriority = newFlow; // Set Priority at end of line
           }
         }
       }
@@ -859,7 +894,9 @@ export default function App() {
   }
 
   return (
-    <div className="flex h-screen w-screen bg-slate-950 font-sans text-slate-200 overflow-hidden">
+    <div
+      className={`flex h-screen w-screen font-sans overflow-hidden transition-colors duration-300 ${T.bgApp} ${T.textMain}`}
+    >
       {/* --- Modals --- */}
       {activeModal === "save" && (
         <SaveLoadModal
@@ -872,6 +909,7 @@ export default function App() {
           currentLayoutId={currentLayoutId}
           setCurrentLayoutId={setCurrentLayoutId}
           user={user}
+          theme={theme}
         />
       )}
       {activeModal === "load" && (
@@ -885,18 +923,30 @@ export default function App() {
           currentLayoutId={currentLayoutId}
           setCurrentLayoutId={setCurrentLayoutId}
           user={user}
+          theme={theme}
         />
       )}
       {activeModal === "profile" && (
-        <UserProfileModal user={user} onClose={() => setActiveModal(null)} />
+        <UserProfileModal
+          user={user}
+          onClose={() => setActiveModal(null)}
+          theme={theme}
+          setTheme={setTheme}
+          gridScale={gridScale}
+          setGridScale={setGridScale}
+        />
       )}
 
       {/* --- Sidebar Mobile Toggle --- */}
       <div className="absolute top-4 left-4 z-50">
         <button
           onClick={() => setIsSidebarOpen(true)}
-          className={`p-2 bg-slate-800 rounded-lg shadow-lg border border-slate-700 hover:bg-slate-700 transition-all ${
+          className={`p-2 rounded-lg shadow-lg border hover:opacity-90 transition-all ${
             isSidebarOpen ? "opacity-0 pointer-events-none" : "opacity-100"
+          } ${
+            theme === "light"
+              ? "bg-white border-slate-200 text-slate-700"
+              : "bg-slate-800 border-slate-700 text-slate-200"
           }`}
         >
           <MenuIcon />
@@ -912,25 +962,33 @@ export default function App() {
 
       {/* --- Main Sidebar --- */}
       <div
-        className={`flex-shrink-0 h-full bg-slate-900/95 backdrop-blur-md shadow-2xl z-40 overflow-hidden transition-[width] duration-300 ease-in-out border-r border-slate-800 flex flex-col ${
+        className={`flex-shrink-0 h-full backdrop-blur-md shadow-2xl z-40 overflow-hidden transition-all duration-300 ease-in-out border-r flex flex-col ${
           isSidebarOpen ? "w-64" : "w-0 border-none"
-        }`}
+        } ${T.sidebarBg} ${T.panelBorder}`}
       >
         <div className="w-64 h-full flex flex-col">
           {/* Header */}
-          <div className="p-6 border-b border-slate-800 bg-gradient-to-r from-slate-900 to-slate-800 flex justify-between items-center">
+          <div
+            className={`p-6 border-b flex justify-between items-center ${
+              T.panelBorder
+            } ${theme === "light" ? "bg-slate-50" : "bg-slate-900"}`}
+          >
             <div className="flex items-center gap-3">
               <div className="w-8 h-8 rounded bg-gradient-to-br from-blue-500 to-cyan-400 flex items-center justify-center text-lg shadow-lg shadow-blue-500/30">
                 🏗️
               </div>
-              <h1 className="text-xl font-bold text-white tracking-tight">
-                City<span className="text-blue-400 font-light">Pro</span>
+              <h1 className={`text-xl font-bold tracking-tight ${T.textMain}`}>
+                City<span className="text-blue-500 font-light">Pro</span>
               </h1>
             </div>
             <div className="flex items-center gap-2">
               <button
                 onClick={() => setActiveModal("profile")}
-                className="w-8 h-8 rounded-full bg-slate-700 border border-slate-600 flex items-center justify-center text-xs font-bold text-slate-300 overflow-hidden hover:ring-2 hover:ring-blue-500 transition-all"
+                className={`w-8 h-8 rounded-full border flex items-center justify-center text-xs font-bold overflow-hidden hover:ring-2 hover:ring-blue-500 transition-all ${
+                  theme === "light"
+                    ? "bg-slate-200 border-slate-300 text-slate-600"
+                    : "bg-slate-700 border-slate-600 text-slate-300"
+                }`}
                 title="User Settings"
               >
                 {user.photoURL ? (
@@ -947,7 +1005,7 @@ export default function App() {
               </button>
               <button
                 onClick={() => setIsSidebarOpen(false)}
-                className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-700 rounded-lg transition-colors border border-transparent hover:border-slate-600"
+                className={`p-1.5 rounded-lg transition-colors border border-transparent ${T.textDim} hover:${T.textMain} hover:${T.panelBg}`}
                 title="Close Menu"
               >
                 <XIcon />
@@ -960,31 +1018,43 @@ export default function App() {
             {!selectedCell &&
               selectedTool &&
               selectedTool.includes("multilane") && (
-                <div className="mb-6 p-4 bg-slate-800 rounded-xl border-l-4 border-slate-400 shadow-md animate-fadeIn">
+                <div
+                  className={`mb-6 p-4 rounded-xl border-l-4 border-slate-400 shadow-md animate-fadeIn ${T.panelBg} ${T.panelBorder} border`}
+                >
                   <div className="flex justify-between items-center mb-3">
-                    <h2 className="text-sm font-bold text-white uppercase tracking-wider">
+                    <h2
+                      className={`text-sm font-bold uppercase tracking-wider ${T.textMain}`}
+                    >
                       🛠️ Tool Settings
                     </h2>
                   </div>
                   <div className="flex justify-between items-center text-xs">
-                    <span className="text-slate-300">Lanes to Place:</span>
+                    <span className={T.textDim}>Lanes to Place:</span>
                     <div className="flex items-center gap-2">
                       <button
                         onClick={() =>
                           setToolLaneCount(Math.max(2, toolLaneCount - 1))
                         }
-                        className="w-6 h-6 bg-slate-700 rounded text-white hover:bg-slate-600 flex items-center justify-center"
+                        className={`w-6 h-6 rounded flex items-center justify-center transition-colors ${
+                          theme === "light"
+                            ? "bg-slate-200 hover:bg-slate-300 text-slate-700"
+                            : "bg-slate-700 hover:bg-slate-600 text-white"
+                        }`}
                       >
                         -
                       </button>
-                      <span className="font-bold text-white">
+                      <span className={`font-bold ${T.textMain}`}>
                         {toolLaneCount}
                       </span>
                       <button
                         onClick={() =>
                           setToolLaneCount(Math.min(6, toolLaneCount + 1))
                         }
-                        className="w-6 h-6 bg-slate-700 rounded text-white hover:bg-slate-600 flex items-center justify-center"
+                        className={`w-6 h-6 rounded flex items-center justify-center transition-colors ${
+                          theme === "light"
+                            ? "bg-slate-200 hover:bg-slate-300 text-slate-700"
+                            : "bg-slate-700 hover:bg-slate-600 text-white"
+                        }`}
                       >
                         +
                       </button>
@@ -993,25 +1063,69 @@ export default function App() {
                 </div>
               )}
 
+            {/* --- NEW: Auto-Spawn Intensity Slider (Responsive) --- */}
+            {!selectedCell && autoSpawnEnabled && (
+              <div
+                className={`mb-6 p-4 rounded-xl border-l-4 border-fuchsia-500 shadow-md animate-fadeIn ${T.panelBg} ${T.panelBorder} border`}
+              >
+                <div className="flex justify-between items-center mb-3">
+                  <h2
+                    className={`text-sm font-bold uppercase tracking-wider ${T.textMain}`}
+                  >
+                    🔄 Auto-Spawn Intensity
+                  </h2>
+                </div>
+                <div className="flex flex-col gap-2">
+                  <div className="flex items-center justify-between w-full gap-2">
+                    <span className={`text-xs min-w-[30px] ${T.textDim}`}>
+                      Slow
+                    </span>
+                    <input
+                      type="range"
+                      min="1"
+                      max="10"
+                      value={spawnRate}
+                      onChange={(e) => setSpawnRate(parseInt(e.target.value))}
+                      className={`w-full flex-1 accent-fuchsia-500 h-1 rounded-lg appearance-none cursor-pointer ${
+                        theme === "light" ? "bg-slate-300" : "bg-slate-700"
+                      }`}
+                    />
+                    <span
+                      className={`text-xs min-w-[30px] text-right ${T.textDim}`}
+                    >
+                      Fast
+                    </span>
+                  </div>
+                  <div className="text-center mt-1 text-[10px] text-fuchsia-500 font-mono font-bold">
+                    Intensity: {spawnRate}
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* --- PROPERTIES PANEL: Selected Multi-Lane Road --- */}
             {selectedCell &&
               selectedCellData &&
               selectedCellData.type &&
               selectedCellData.type.includes("multilane") && (
-                <div className="mb-6 p-4 bg-slate-800 rounded-xl border-l-4 border-slate-400 shadow-md animate-fadeIn">
+                <div
+                  className={`mb-6 p-4 rounded-xl border-l-4 border-slate-400 shadow-md animate-fadeIn ${T.panelBg} ${T.panelBorder} border`}
+                >
                   <div className="flex justify-between items-center mb-3">
-                    <h2 className="text-sm font-bold text-white uppercase tracking-wider">
+                    <h2
+                      className={`text-sm font-bold uppercase tracking-wider ${T.textMain}`}
+                    >
                       🛣️ Road Config
                     </h2>
                     <button
                       onClick={() => setSelectedCell(null)}
-                      className="text-xs text-slate-400 hover:text-white"
+                      className={`text-xs ${T.textDim} hover:${T.textMain}`}
                     >
                       Close
                     </button>
                   </div>
                   <div className="flex justify-between items-center text-xs">
-                    <span className="text-slate-300">Lanes:</span>
+                    <span className={T.textDim}>Lanes:</span>
                     <div className="flex items-center gap-2">
                       <button
                         onClick={() =>
@@ -1021,18 +1135,26 @@ export default function App() {
                             -1
                           )
                         }
-                        className="w-6 h-6 bg-slate-700 rounded text-white hover:bg-slate-600 flex items-center justify-center"
+                        className={`w-6 h-6 rounded flex items-center justify-center transition-colors ${
+                          theme === "light"
+                            ? "bg-slate-200 hover:bg-slate-300 text-slate-700"
+                            : "bg-slate-700 hover:bg-slate-600 text-white"
+                        }`}
                       >
                         -
                       </button>
-                      <span className="font-bold text-white">
+                      <span className={`font-bold ${T.textMain}`}>
                         {selectedCellData.laneCount || 2}
                       </span>
                       <button
                         onClick={() =>
                           updateLaneCount(selectedCell.row, selectedCell.col, 1)
                         }
-                        className="w-6 h-6 bg-slate-700 rounded text-white hover:bg-slate-600 flex items-center justify-center"
+                        className={`w-6 h-6 rounded flex items-center justify-center transition-colors ${
+                          theme === "light"
+                            ? "bg-slate-200 hover:bg-slate-300 text-slate-700"
+                            : "bg-slate-700 hover:bg-slate-600 text-white"
+                        }`}
                       >
                         +
                       </button>
@@ -1045,14 +1167,18 @@ export default function App() {
             {selectedCell &&
               selectedCellData &&
               selectedCellData.type === "traffic_light" && (
-                <div className="mb-6 p-4 bg-slate-800 rounded-xl border-l-4 border-blue-500 shadow-md animate-fadeIn">
+                <div
+                  className={`mb-6 p-4 rounded-xl border-l-4 border-blue-500 shadow-md animate-fadeIn ${T.panelBg} ${T.panelBorder} border`}
+                >
                   <div className="flex justify-between items-center mb-3">
-                    <h2 className="text-sm font-bold text-white uppercase tracking-wider">
+                    <h2
+                      className={`text-sm font-bold uppercase tracking-wider ${T.textMain}`}
+                    >
                       🚦 Signal Config
                     </h2>
                     <button
                       onClick={() => setSelectedCell(null)}
-                      className="text-xs text-slate-400 hover:text-white"
+                      className={`text-xs ${T.textDim} hover:${T.textMain}`}
                     >
                       Close
                     </button>
@@ -1062,7 +1188,7 @@ export default function App() {
                       {["green", "yellow", "red"].map((color) => (
                         <div key={color}>
                           <label
-                            className={`text-[10px] text-${color}-400 block mb-1 capitalize`}
+                            className={`text-[10px] text-${color}-500 block mb-1 capitalize font-bold`}
                           >
                             {color}
                           </label>
@@ -1078,22 +1204,28 @@ export default function App() {
                                 e.target.value
                               )
                             }
-                            className="w-full bg-slate-900 border border-slate-600 rounded p-1 text-xs text-center text-white"
+                            className={`w-full border rounded p-1 text-xs text-center ${
+                              theme === "light"
+                                ? "bg-slate-50 border-slate-300 text-slate-900"
+                                : "bg-slate-900 border-slate-600 text-white"
+                            }`}
                           />
                         </div>
                       ))}
                     </div>
-                    <div className="bg-slate-900 p-2 rounded flex justify-between items-center">
-                      <span className="text-xs text-slate-500">
-                        Current State:
-                      </span>
+                    <div
+                      className={`p-2 rounded flex justify-between items-center ${
+                        theme === "light" ? "bg-slate-100" : "bg-slate-900"
+                      }`}
+                    >
+                      <span className={`text-xs ${T.textDim}`}>State:</span>
                       <span
                         className={`text-xs font-bold px-2 py-0.5 rounded ${
                           selectedCellData.state === "green"
-                            ? "bg-green-900 text-green-400"
+                            ? "bg-green-100 text-green-600 border border-green-200"
                             : selectedCellData.state === "yellow"
-                            ? "bg-yellow-900 text-yellow-400"
-                            : "bg-red-900 text-red-400"
+                            ? "bg-yellow-100 text-yellow-600 border border-yellow-200"
+                            : "bg-red-100 text-red-600 border border-red-200"
                         }`}
                       >
                         {(selectedCellData.state || "GREEN").toUpperCase()} (
@@ -1106,21 +1238,27 @@ export default function App() {
 
             {/* --- PROPERTIES PANEL: Car Settings --- */}
             {selectedCell && selectedCellData && selectedCellData.hasCar && (
-              <div className="mb-6 p-4 bg-slate-800 rounded-xl border-l-4 border-orange-500 shadow-md animate-fadeIn">
+              <div
+                className={`mb-6 p-4 rounded-xl border-l-4 border-orange-500 shadow-md animate-fadeIn ${T.panelBg} ${T.panelBorder} border`}
+              >
                 <div className="flex justify-between items-center mb-3">
-                  <h2 className="text-sm font-bold text-white uppercase tracking-wider">
+                  <h2
+                    className={`text-sm font-bold uppercase tracking-wider ${T.textMain}`}
+                  >
                     🚗 Car Settings
                   </h2>
                   <button
                     onClick={() => setSelectedCell(null)}
-                    className="text-xs text-slate-400 hover:text-white"
+                    className={`text-xs ${T.textDim} hover:${T.textMain}`}
                   >
                     Close
                   </button>
                 </div>
                 <div className="space-y-4">
                   <div>
-                    <div className="flex justify-between text-[10px] text-slate-400 mb-1">
+                    <div
+                      className={`flex justify-between text-[10px] mb-1 ${T.textDim}`}
+                    >
                       <span>Speed</span>
                       <span>{selectedCellData.carConfig?.speed || 1}x</span>
                     </div>
@@ -1138,11 +1276,13 @@ export default function App() {
                           parseFloat(e.target.value)
                         )
                       }
-                      className="w-full accent-orange-500 h-1 bg-slate-700 rounded-lg appearance-none cursor-pointer"
+                      className={`w-full accent-orange-500 h-1 rounded-lg appearance-none cursor-pointer ${
+                        theme === "light" ? "bg-slate-300" : "bg-slate-700"
+                      }`}
                     />
                   </div>
                   <div>
-                    <label className="text-[10px] text-slate-400 block mb-2">
+                    <label className={`text-[10px] block mb-2 ${T.textDim}`}>
                       Turn Priority
                     </label>
                     <div className="grid grid-cols-3 gap-2">
@@ -1161,6 +1301,8 @@ export default function App() {
                             (selectedCellData.carConfig?.turnBias || "none") ===
                             bias
                               ? "bg-orange-600 border-orange-400 text-white"
+                              : theme === "light"
+                              ? "bg-slate-100 border-slate-300 text-slate-500"
                               : "bg-slate-700 border-slate-600 text-slate-400"
                           }`}
                         >
@@ -1182,14 +1324,18 @@ export default function App() {
               selectedCellData &&
               selectedCellData.type &&
               selectedCellData.type.startsWith("road") && (
-                <div className="mb-6 p-4 bg-slate-800 rounded-xl border-l-4 border-emerald-500 shadow-md animate-fadeIn">
+                <div
+                  className={`mb-6 p-4 rounded-xl border-l-4 border-emerald-500 shadow-md animate-fadeIn ${T.panelBg} ${T.panelBorder} border`}
+                >
                   <div className="flex justify-between items-center mb-3">
-                    <h2 className="text-sm font-bold text-white uppercase tracking-wider">
+                    <h2
+                      className={`text-sm font-bold uppercase tracking-wider ${T.textMain}`}
+                    >
                       🛣️ Traffic Flow
                     </h2>
                     <button
                       onClick={() => setSelectedCell(null)}
-                      className="text-xs text-slate-400 hover:text-white"
+                      className={`text-xs ${T.textDim} hover:${T.textMain}`}
                     >
                       Close
                     </button>
@@ -1206,8 +1352,10 @@ export default function App() {
                         }
                         className={`p-1 rounded text-[10px] border ${
                           !selectedCellData.flowDirection
-                            ? "bg-emerald-600"
-                            : "bg-slate-700"
+                            ? "bg-emerald-600 text-white border-emerald-500"
+                            : theme === "light"
+                            ? "bg-slate-100 border-slate-300 text-slate-500"
+                            : "bg-slate-700 border-slate-600 text-slate-300"
                         }`}
                       >
                         Any
@@ -1224,8 +1372,10 @@ export default function App() {
                           }
                           className={`p-1 rounded text-lg border ${
                             selectedCellData.flowDirection === dir
-                              ? "bg-emerald-600"
-                              : "bg-slate-700"
+                              ? "bg-emerald-600 text-white border-emerald-500"
+                              : theme === "light"
+                              ? "bg-slate-100 border-slate-300 text-slate-500"
+                              : "bg-slate-700 border-slate-600 text-slate-300"
                           }`}
                         >
                           {dir === "up"
@@ -1238,7 +1388,13 @@ export default function App() {
                         </button>
                       ))}
                     </div>
-                    <div className="pt-2 border-t border-slate-700 mt-2">
+                    <div
+                      className={`pt-2 border-t mt-2 ${
+                        theme === "light"
+                          ? "border-slate-200"
+                          : "border-slate-700"
+                      }`}
+                    >
                       <button
                         onClick={() =>
                           floodFillFlow(
@@ -1247,7 +1403,11 @@ export default function App() {
                             selectedCellData.flowDirection
                           )
                         }
-                        className="w-full py-1.5 bg-slate-700 hover:bg-slate-600 text-xs text-slate-300 rounded transition-colors"
+                        className={`w-full py-1.5 text-xs rounded transition-colors ${
+                          theme === "light"
+                            ? "bg-slate-200 hover:bg-slate-300 text-slate-700"
+                            : "bg-slate-700 hover:bg-slate-600 text-slate-300"
+                        }`}
                       >
                         Apply to Connected
                       </button>
@@ -1258,8 +1418,12 @@ export default function App() {
 
             {/* --- Helper Text --- */}
             {!selectedCell && (
-              <div className="mb-6 p-4 border border-dashed border-slate-700 rounded-xl text-center">
-                <p className="text-xs text-slate-500">
+              <div
+                className={`mb-6 p-4 border border-dashed rounded-xl text-center ${
+                  theme === "light" ? "border-slate-300" : "border-slate-700"
+                }`}
+              >
+                <p className={`text-xs ${T.textDim}`}>
                   Select a Road or Signal with{" "}
                   <span className="text-lg">👆</span> to edit.
                 </p>
@@ -1268,7 +1432,9 @@ export default function App() {
 
             {/* --- Tools Palette --- */}
             <div className="mb-8">
-              <h2 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3 ml-1">
+              <h2
+                className={`text-xs font-bold uppercase tracking-wider mb-3 ml-1 ${T.textDim}`}
+              >
                 Tools & Objects
               </h2>
               <div className="grid grid-cols-2 gap-3">
@@ -1317,13 +1483,21 @@ export default function App() {
 
           {/* Footer: Back Button */}
           {paletteMode !== "main" && (
-            <div className="p-4 border-t border-slate-800 bg-slate-900">
+            <div
+              className={`p-4 border-t ${T.panelBorder} ${
+                theme === "light" ? "bg-slate-50" : "bg-slate-900"
+              }`}
+            >
               <button
                 onClick={() => {
                   setPaletteMode("main");
                   setSelectedTool("select");
                 }}
-                className="w-full py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg flex items-center justify-center gap-2 transition-colors border border-slate-700"
+                className={`w-full py-2 rounded-lg flex items-center justify-center gap-2 transition-colors border ${
+                  theme === "light"
+                    ? "bg-white border-slate-200 hover:bg-slate-50 text-slate-600"
+                    : "bg-slate-800 border-slate-700 hover:bg-slate-700 text-slate-300"
+                }`}
               >
                 <BackArrowIcon />
                 <span className="text-sm font-medium">Back to Menu</span>
@@ -1334,13 +1508,25 @@ export default function App() {
       </div>
 
       {/* --- Main Stage --- */}
-      <div className="flex-1 relative overflow-hidden bg-slate-950 flex flex-col min-w-0">
+      <div
+        className={`flex-1 relative overflow-hidden flex flex-col min-w-0 ${T.bgApp}`}
+      >
         {/* Floating Controls: Bottom Right */}
-        <div className="absolute bottom-8 right-8 z-50 flex items-center gap-2 p-2 bg-slate-900/90 backdrop-blur-md border border-slate-700 rounded-2xl shadow-2xl">
+        <div
+          className={`absolute bottom-8 right-8 z-50 flex items-center gap-2 p-2 backdrop-blur-md border rounded-2xl shadow-2xl ${
+            theme === "light"
+              ? "bg-white/90 border-slate-200"
+              : "bg-slate-900/90 border-slate-700"
+          }`}
+        >
           <button
             onClick={() => setStep((s) => Math.max(0, s - 1))}
             disabled={step === 0}
-            className="p-3 text-slate-300 hover:text-white hover:bg-slate-700 rounded-xl transition-colors disabled:opacity-30"
+            className={`p-3 rounded-xl transition-colors disabled:opacity-30 ${
+              theme === "light"
+                ? "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
+                : "text-slate-300 hover:text-white hover:bg-slate-700"
+            }`}
             title="Undo"
           >
             <UndoIcon />
@@ -1348,12 +1534,20 @@ export default function App() {
           <button
             onClick={() => setStep((s) => Math.min(history.length - 1, s + 1))}
             disabled={step === history.length - 1}
-            className="p-3 text-slate-300 hover:text-white hover:bg-slate-700 rounded-xl transition-colors disabled:opacity-30"
+            className={`p-3 rounded-xl transition-colors disabled:opacity-30 ${
+              theme === "light"
+                ? "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
+                : "text-slate-300 hover:text-white hover:bg-slate-700"
+            }`}
             title="Redo"
           >
             <RedoIcon />
           </button>
-          <div className="w-px h-6 bg-slate-700 mx-1"></div>
+          <div
+            className={`w-px h-6 mx-1 ${
+              theme === "light" ? "bg-slate-300" : "bg-slate-700"
+            }`}
+          ></div>
           <button
             onClick={() => setActiveModal("save")}
             className="p-3 text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/20 rounded-xl transition-colors"
@@ -1368,7 +1562,11 @@ export default function App() {
           >
             <LoadIcon />
           </button>
-          <div className="w-px h-6 bg-slate-700 mx-1"></div>
+          <div
+            className={`w-px h-6 mx-1 ${
+              theme === "light" ? "bg-slate-300" : "bg-slate-700"
+            }`}
+          ></div>
           <button
             onClick={() => {
               if (confirm("Clear entire grid? This cannot be undone.")) {
@@ -1389,8 +1587,20 @@ export default function App() {
 
         {/* Floating Controls: Top Center */}
         <div className="absolute top-4 left-0 right-0 z-20 flex justify-center pointer-events-none">
-          <div className="flex items-center gap-4 px-6 py-3 bg-slate-900/90 backdrop-blur-md rounded-full border border-slate-700 shadow-2xl pointer-events-auto">
-            <div className="hidden md:block mr-4 pr-4 border-r border-slate-700 text-xs text-slate-400">
+          <div
+            className={`flex items-center gap-4 px-6 py-3 backdrop-blur-md rounded-full border shadow-2xl pointer-events-auto ${
+              theme === "light"
+                ? "bg-white/90 border-slate-200"
+                : "bg-slate-900/90 border-slate-700"
+            }`}
+          >
+            <div
+              className={`hidden md:block mr-4 pr-4 border-r text-xs ${
+                theme === "light"
+                  ? "border-slate-300 text-slate-500"
+                  : "border-slate-700 text-slate-400"
+              }`}
+            >
               {selectedTool === "select"
                 ? "Select Mode (Click objects)"
                 : `Painting: ${selectedTool}`}
@@ -1411,7 +1621,11 @@ export default function App() {
                 if (prePlayStep !== null) setStep(prePlayStep);
                 setIsPlaying(false);
               }}
-              className="px-4 py-2 rounded-full bg-slate-800 text-slate-300 text-xs border border-slate-600"
+              className={`px-4 py-2 rounded-full text-xs border ${
+                theme === "light"
+                  ? "bg-slate-100 text-slate-600 border-slate-300"
+                  : "bg-slate-800 text-slate-300 border-slate-600"
+              }`}
               disabled={prePlayStep === null}
             >
               Reset
@@ -1419,18 +1633,26 @@ export default function App() {
           </div>
         </div>
 
-        {/* Grid Canvas */}
+        {/* Grid Canvas Container with Scaling */}
         <div className="flex-1 flex items-center justify-center p-8 overflow-auto">
-          <Grid
-            grid={grid}
-            rows={rows}
-            cols={cols}
-            onDrop={(r, c, t) => updateGrid(r, c, t)}
-            onPaint={(r, c) => handleCellAction(r, c)}
-            setIsMouseDown={setIsMouseDown}
-            onRightClick={(r, c) => updateGrid(r, c, "eraser")}
-            selectedCell={selectedCell}
-          />
+          <div
+            style={{
+              transform: `scale(${gridScale})`,
+              transformOrigin: "center center",
+              transition: "transform 0.2s ease-out",
+            }}
+          >
+            <Grid
+              grid={grid}
+              rows={rows}
+              cols={cols}
+              onDrop={(r, c, t) => updateGrid(r, c, t)}
+              onPaint={(r, c) => handleCellAction(r, c)}
+              setIsMouseDown={setIsMouseDown}
+              onRightClick={(r, c) => updateGrid(r, c, "eraser")}
+              selectedCell={selectedCell}
+            />
+          </div>
         </div>
       </div>
     </div>
