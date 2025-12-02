@@ -1,1653 +1,64 @@
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+/**
+ * FILE PURPOSE:
+ * The Main Application Component.
+ *
+ * RESPONSIBILITIES:
+ * - Manages Global State (User, Grid History, Selection, Play/Pause).
+ * - Runs the Simulation Loop (Traffic logic, Car movement).
+ * - Handles User Interactions (Clicking, Dragging, Key presses).
+ * - Orchestrates the layout of the Sidebar and Main Stage.
+ *
+ * DEPENDENCIES:
+ * - ./components/* (UI Building Blocks)
+ * - ./constants (Configuration)
+ * - Firebase (Auth)
+ */
+
+import React, { useState, useEffect, useCallback, useRef } from "react";
 // --- FIREBASE IMPORTS ---
-import { db, auth } from "./firebase";
+import { auth } from "./firebase";
+import { onAuthStateChanged } from "firebase/auth";
+
+// --- COMPONENT IMPORTS ---
+import { Grid } from "./components/Grid";
+import PaletteItem from "./components/PaletteItem";
+import LoginScreen from "./components/LoginScreen";
+import { UserProfileModal, SaveLoadModal } from "./components/Modals";
 import {
-  collection,
-  getDocs,
-  addDoc,
-  updateDoc,
-  deleteDoc,
-  doc,
-  query,
-  where,
-} from "firebase/firestore";
+  MenuIcon,
+  XIcon,
+  UndoIcon,
+  RedoIcon,
+  TrashIcon,
+  SaveIcon,
+  LoadIcon,
+  BackArrowIcon,
+} from "./components/Icons";
+
+// --- CONSTANTS ---
 import {
-  signInWithEmailAndPassword,
-  createUserWithEmailAndPassword,
-  signOut,
-  onAuthStateChanged,
-  updateEmail,
-  verifyBeforeUpdateEmail,
-  sendPasswordResetEmail,
-  reauthenticateWithCredential,
-  EmailAuthProvider,
-} from "firebase/auth";
-
-// --- Constants ---
-const TOTAL_GRID_WIDTH_PX = 19 * 64;
-const TOTAL_GRID_HEIGHT_PX = 12 * 64;
-
-// --- Icons ---
-const MenuIcon = () => (
-  <svg
-    xmlns="http://www.w3.org/2000/svg"
-    width="24"
-    height="24"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <line x1="3" y1="12" x2="21" y2="12"></line>
-    <line x1="3" y1="6" x2="21" y2="6"></line>
-    <line x1="3" y1="18" x2="21" y2="18"></line>
-  </svg>
-);
-const XIcon = () => (
-  <svg
-    xmlns="http://www.w3.org/2000/svg"
-    width="16"
-    height="16"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="3"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <line x1="18" y1="6" x2="6" y2="18"></line>
-    <line x1="6" y1="6" x2="18" y2="18"></line>
-  </svg>
-);
-const UndoIcon = () => (
-  <svg
-    xmlns="http://www.w3.org/2000/svg"
-    width="20"
-    height="20"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <path d="M3 7v6h6" />
-    <path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13" />
-  </svg>
-);
-const RedoIcon = () => (
-  <svg
-    xmlns="http://www.w3.org/2000/svg"
-    width="20"
-    height="20"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <path d="M21 7v6h-6" />
-    <path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3L21 13" />
-  </svg>
-);
-const TrashIcon = () => (
-  <svg
-    xmlns="http://www.w3.org/2000/svg"
-    width="20"
-    height="20"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <polyline points="3 6 5 6 21 6" />
-    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-  </svg>
-);
-const SaveIcon = () => (
-  <svg
-    xmlns="http://www.w3.org/2000/svg"
-    width="20"
-    height="20"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
-    <polyline points="17 21 17 13 7 13 7 21"></polyline>
-    <polyline points="7 3 7 8 15 8"></polyline>
-  </svg>
-);
-const LoadIcon = () => (
-  <svg
-    xmlns="http://www.w3.org/2000/svg"
-    width="20"
-    height="20"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
-  </svg>
-);
-const BackArrowIcon = () => (
-  <svg
-    xmlns="http://www.w3.org/2000/svg"
-    width="16"
-    height="16"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <line x1="19" y1="12" x2="5" y2="12"></line>
-    <polyline points="12 19 5 12 12 5"></polyline>
-  </svg>
-);
-const UserIcon = () => (
-  <svg
-    xmlns="http://www.w3.org/2000/svg"
-    width="20"
-    height="20"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
-    <circle cx="12" cy="7" r="4"></circle>
-  </svg>
-);
-
-// --- Palettes ---
-const MAIN_PALETTE_ITEMS = [
-  {
-    type: "select",
-    label: "Select",
-    emoji: "👆",
-    color: "from-blue-500 to-cyan-400",
-  },
-  {
-    type: "road_menu",
-    label: "Roads",
-    emoji: "🛣️",
-    color: "from-slate-500 to-slate-400",
-  },
-  {
-    type: "decoration_menu",
-    label: "Decor",
-    emoji: "🌳",
-    color: "from-green-500 to-emerald-400",
-  },
-  {
-    type: "random_menu",
-    label: "Randomize",
-    emoji: "🎲",
-    color: "from-violet-500 to-fuchsia-400",
-  },
-  {
-    type: "car",
-    label: "Car",
-    emoji: "🚗",
-    color: "from-red-500 to-orange-400",
-  },
-  {
-    type: "traffic_light",
-    label: "Signal",
-    emoji: "🚦",
-    color: "from-yellow-400 to-orange-500",
-  },
-  {
-    type: "eraser",
-    label: "Eraser",
-    emoji: "🧼",
-    color: "from-pink-500 to-rose-400",
-  },
-];
-
-const ROAD_PALETTE_ITEMS = [
-  {
-    type: "road_straight_vertical",
-    label: "Vertical",
-    emoji: "⬆️",
-    color: "from-gray-500 to-gray-400",
-  },
-  {
-    type: "road_straight_horizontal",
-    label: "Horizontal",
-    emoji: "➡️",
-    color: "from-gray-500 to-gray-400",
-  },
-  {
-    type: "road_intersection",
-    label: "Intersect",
-    emoji: "➕",
-    color: "from-gray-600 to-gray-500",
-  },
-  // --- MULTI-LANE ROADS ---
-  {
-    type: "road_multilane_vertical",
-    label: "Multi-Lane Vert",
-    emoji: "║",
-    color: "from-slate-600 to-slate-500",
-  },
-  {
-    type: "road_multilane_horizontal",
-    label: "Multi-Lane Horz",
-    emoji: "═",
-    color: "from-slate-600 to-slate-500",
-  },
-  // --- NEW DIVIDER ROADS ---
-  {
-    type: "road_divider_vertical",
-    label: "Divider Vert",
-    emoji: "⎸",
-    color: "from-yellow-600 to-yellow-500",
-  },
-  {
-    type: "road_divider_horizontal",
-    label: "Divider Horz",
-    emoji: "―",
-    color: "from-yellow-600 to-yellow-500",
-  },
-];
-
-const DECORATION_PALETTE_ITEMS = [
-  {
-    type: "building",
-    label: "Building",
-    emoji: "🏢",
-    color: "from-indigo-500 to-purple-500",
-  },
-  {
-    type: "tree",
-    label: "Tree",
-    emoji: "🌳",
-    color: "from-green-500 to-emerald-400",
-  },
-];
-
-// --- NEW RANDOMIZER PALETTE ---
-const RANDOM_PALETTE_ITEMS = [
-  {
-    type: "populate_cars",
-    label: "Populate Now",
-    emoji: "✨",
-    color: "from-violet-500 to-indigo-500",
-  },
-  {
-    type: "toggle_autospawn",
-    label: "Auto Spawn",
-    emoji: "🔄",
-    color: "from-fuchsia-500 to-pink-500",
-  },
-];
+  MAIN_PALETTE_ITEMS,
+  ROAD_PALETTE_ITEMS,
+  DECORATION_PALETTE_ITEMS,
+  RANDOM_PALETTE_ITEMS,
+} from "./constants";
 
 // --- Helper Functions ---
 const createEmptyGrid = (rows, cols) =>
   Array.from({ length: rows }, () => Array(cols).fill(null));
 
-// --- Renderers ---
-const renderCar = (direction) => {
-  let rotation = 0;
-  if (direction === "right") rotation = 90;
-  if (direction === "down") rotation = 180;
-  if (direction === "left") rotation = 270;
-
-  return (
-    <g transform={`translate(50,50) rotate(${rotation}) translate(-25,-30)`}>
-      <rect x="2" y="4" width="50" height="60" rx="8" fill="rgba(0,0,0,0.2)" />
-      <rect x="-4" y="8" width="8" height="12" rx="2" fill="#333" />
-      <rect x="46" y="8" width="8" height="12" rx="2" fill="#333" />
-      <rect x="-4" y="40" width="8" height="12" rx="2" fill="#333" />
-      <rect x="46" y="40" width="8" height="12" rx="2" fill="#333" />
-      <rect
-        x="0"
-        y="0"
-        width="50"
-        height="60"
-        rx="8"
-        fill="#EF4444"
-        stroke="#991B1B"
-        strokeWidth="2"
-      />
-      <rect x="5" y="8" width="40" height="10" rx="2" fill="#93C5FD" />
-      <rect x="5" y="42" width="40" height="8" rx="2" fill="#93C5FD" />
-      <rect
-        x="6"
-        y="20"
-        width="38"
-        height="20"
-        rx="1"
-        fill="#F87171"
-        opacity="0.5"
-      />
-    </g>
-  );
-};
-
-const renderTrafficLight = (lightState) => {
-  const colors = {
-    green: "#22c55e",
-    yellow: "#eab308",
-    red: "#ef4444",
-    off: "#374151",
-  };
-  const currentState = lightState || "green";
-
-  return (
-    <g transform="translate(25, 10)">
-      <rect
-        x="0"
-        y="0"
-        width="50"
-        height="80"
-        rx="10"
-        fill="#1f2937"
-        stroke="#4b5563"
-        strokeWidth="2"
-      />
-      <circle
-        cx="25"
-        cy="20"
-        r="8"
-        fill={currentState === "red" ? colors.red : colors.off}
-      />
-      <circle
-        cx="25"
-        cy="40"
-        r="8"
-        fill={currentState === "yellow" ? colors.yellow : colors.off}
-      />
-      <circle
-        cx="25"
-        cy="60"
-        r="8"
-        fill={currentState === "green" ? colors.green : colors.off}
-      />
-    </g>
-  );
-};
-
-const renderDirectionArrow = (direction) => {
-  let content = null;
-  let rot = 0;
-
-  // Straight Arrows
-  if (
-    direction === "up" ||
-    direction === "down" ||
-    direction === "left" ||
-    direction === "right"
-  ) {
-    if (direction === "right") rot = 90;
-    else if (direction === "down") rot = 180;
-    else if (direction === "left") rot = 270;
-    content = (
-      <>
-        <path d="M0 -15 L10 5 L-10 5 Z" fill="white" />
-        <rect x="-4" y="5" width="8" height="15" fill="white" />
-      </>
-    );
-  }
-  // Curved Arrows (L-Shapes)
-  else if (direction && direction.startsWith("turn_")) {
-    const parts = direction.split("_"); // [turn, entry, exit]
-    const entry = parts[1];
-    const exit = parts[2];
-
-    let pathD = "";
-    let headD = "";
-
-    // Drawing paths relative to center (0,0) with translate(50,50)
-    // Standard "Up-Right" turn (from bottom to right)
-    if (entry === "up" && exit === "right") {
-      pathD = "M 0 35 Q 0 0 35 0";
-      headD = "M 35 0 L 25 -5 L 25 5 Z";
-      rot = 0;
-    } else if (entry === "left" && exit === "up") {
-      pathD = "M -35 0 Q 0 0 0 -35";
-      headD = "M 0 -35 L -5 -25 L 5 -25 Z";
-      rot = 0;
-    } else if (entry === "down" && exit === "left") {
-      pathD = "M 0 -35 Q 0 0 -35 0";
-      headD = "M -35 0 L -25 -5 L -25 5 Z";
-      rot = 0;
-    } else if (entry === "right" && exit === "down") {
-      pathD = "M 35 0 Q 0 0 0 35";
-      headD = "M 0 35 L -5 25 L 5 25 Z";
-      rot = 0;
-    } else if (entry === "up" && exit === "left") {
-      pathD = "M 0 35 Q 0 0 -35 0";
-      headD = "M -35 0 L -25 -5 L -25 5 Z";
-      rot = 0;
-    } else if (entry === "left" && exit === "down") {
-      pathD = "M -35 0 Q 0 0 0 35";
-      headD = "M 0 35 L -5 25 L 5 25 Z";
-      rot = 0;
-    } else if (entry === "down" && exit === "right") {
-      pathD = "M 0 -35 Q 0 0 35 0";
-      headD = "M 35 0 L 25 -5 L 25 5 Z";
-      rot = 0;
-    } else if (entry === "right" && exit === "up") {
-      pathD = "M 35 0 Q 0 0 0 -35";
-      headD = "M 0 -35 L -5 -25 L 5 -25 Z";
-      rot = 0;
-    }
-
-    content = (
-      <>
-        <path
-          d={pathD}
-          fill="none"
-          stroke="white"
-          strokeWidth="8"
-          strokeLinecap="round"
-        />
-        <path d={headD} fill="white" />
-      </>
-    );
-  }
-
-  return (
-    <g
-      transform={`translate(50,50) rotate(${rot})`}
-      opacity="0.9"
-      style={{ pointerEvents: "none" }}
-    >
-      {content}
-    </g>
-  );
-};
-
-const renderCellContent = (cellData, neighborInfo) => {
-  const cellType = cellData?.type;
-  const carDirection = cellData?.hasCar;
-  const flowDirection = cellData?.flowDirection;
-  const content = [];
-
-  if (cellType) {
-    if (cellType === "traffic_light") {
-      content.push(
-        <React.Fragment key="light">
-          {renderTrafficLight(cellData.state)}
-        </React.Fragment>
-      );
-    } else if (!cellType.startsWith("road_")) {
-      const item =
-        MAIN_PALETTE_ITEMS.find((p) => p.type === cellType) ||
-        ROAD_PALETTE_ITEMS.find((p) => p.type === cellType) ||
-        DECORATION_PALETTE_ITEMS.find((p) => p.type === cellType);
-      if (item) {
-        content.push(
-          <foreignObject key="base" x="0" y="0" width="100" height="100">
-            <div className="w-full h-full flex items-center justify-center text-4xl drop-shadow-md">
-              {item.emoji}
-            </div>
-          </foreignObject>
-        );
-      }
-    } else {
-      const strokeColor = "#334155";
-      const strokeWidth = 80;
-      const center = 50;
-
-      // --- NEW DIVIDER RENDERING ---
-      if (cellType === "road_divider_vertical") {
-        const pos = cellData.lanePosition || 0; // 0=Left, 1=Right
-
-        // Background Road
-        content.push(
-          <line
-            key="bg-road"
-            x1={center}
-            y1={-1}
-            x2={center}
-            y2={101}
-            stroke={strokeColor}
-            strokeWidth={strokeWidth}
-          />
-        );
-
-        // Solid Yellow Line Logic
-        // If Left (Primary), draw on Right Edge (100)
-        // If Right (Secondary), draw on Left Edge (0)
-        const lineX = pos === 0 ? 100 : 0;
-        content.push(
-          <line
-            key="divider-line"
-            x1={lineX}
-            y1={0}
-            x2={lineX}
-            y2={100}
-            stroke="#FACC15" // Yellow-400
-            strokeWidth="6"
-          />
-        );
-      } else if (cellType === "road_divider_horizontal") {
-        const pos = cellData.lanePosition || 0; // 0=Top, 1=Bottom
-
-        // Background Road
-        content.push(
-          <line
-            key="bg-road"
-            x1={-1}
-            y1={center}
-            x2={101}
-            y2={center}
-            stroke={strokeColor}
-            strokeWidth={strokeWidth}
-          />
-        );
-
-        // Solid Yellow Line Logic
-        // If Top (Primary), draw on Bottom Edge (100)
-        // If Bottom (Secondary), draw on Top Edge (0)
-        const lineY = pos === 0 ? 100 : 0;
-        content.push(
-          <line
-            key="divider-line"
-            x1={0}
-            y1={lineY}
-            x2={100}
-            y2={lineY}
-            stroke="#FACC15" // Yellow-400
-            strokeWidth="6"
-          />
-        );
-      }
-
-      // --- MULTI-LANE RENDERING (N-Lanes) ---
-      else if (cellType === "road_multilane_vertical") {
-        const pos = cellData.lanePosition || 0;
-        const count = cellData.laneCount || 2;
-
-        // Background
-        content.push(
-          <line
-            key="bg-road"
-            x1={center}
-            y1={-1}
-            x2={center}
-            y2={101}
-            stroke={strokeColor}
-            strokeWidth={strokeWidth}
-          />
-        );
-
-        // Left Dotted Line
-        if (pos > 0) {
-          content.push(
-            <line
-              key="dashed-line-left"
-              x1={0}
-              y1={0}
-              x2={0}
-              y2={100}
-              stroke="white"
-              strokeWidth="6"
-              strokeDasharray="12,12"
-            />
-          );
-        }
-
-        // Right Dotted Line
-        if (pos < count - 1) {
-          content.push(
-            <line
-              key="dashed-line-right"
-              x1={100}
-              y1={0}
-              x2={100}
-              y2={100}
-              stroke="white"
-              strokeWidth="6"
-              strokeDasharray="12,12"
-            />
-          );
-        }
-      } else if (cellType === "road_multilane_horizontal") {
-        const pos = cellData.lanePosition || 0;
-        const count = cellData.laneCount || 2;
-
-        // Background
-        content.push(
-          <line
-            key="bg-road"
-            x1={-1}
-            y1={center}
-            x2={101}
-            y2={center}
-            stroke={strokeColor}
-            strokeWidth={strokeWidth}
-          />
-        );
-
-        // Top Dotted Line
-        if (pos > 0) {
-          content.push(
-            <line
-              key="dashed-line-top"
-              x1={0}
-              y1={0}
-              x2={100}
-              y2={0}
-              stroke="white"
-              strokeWidth="6"
-              strokeDasharray="12,12"
-            />
-          );
-        }
-
-        // Bottom Dotted Line
-        if (pos < count - 1) {
-          content.push(
-            <line
-              key="dashed-line-bottom"
-              x1={0}
-              y1={100}
-              x2={100}
-              y2={100}
-              stroke="white"
-              strokeWidth="6"
-              strokeDasharray="12,12"
-            />
-          );
-        }
-      }
-      // --- STANDARD ROADS ---
-      else if (cellType === "road_intersection") {
-        const { up, down, left, right } = neighborInfo;
-        if (up)
-          content.push(
-            <line
-              key="up"
-              x1={center}
-              y1={center}
-              x2={center}
-              y2={-1}
-              stroke={strokeColor}
-              strokeWidth={strokeWidth}
-            />
-          );
-        if (down)
-          content.push(
-            <line
-              key="down"
-              x1={center}
-              y1={center}
-              x2={center}
-              y2={101}
-              stroke={strokeColor}
-              strokeWidth={strokeWidth}
-            />
-          );
-        if (left)
-          content.push(
-            <line
-              key="left"
-              x1={center}
-              y1={center}
-              x2={-1}
-              y2={center}
-              stroke={strokeColor}
-              strokeWidth={strokeWidth}
-            />
-          );
-        if (right)
-          content.push(
-            <line
-              key="right"
-              x1={center}
-              y1={center}
-              x2={101}
-              y2={center}
-              stroke={strokeColor}
-              strokeWidth={strokeWidth}
-            />
-          );
-        if (!(up || down || left || right))
-          content.push(
-            <circle
-              key="dot"
-              cx={center}
-              cy={center}
-              r={strokeWidth / 2}
-              fill={strokeColor}
-            />
-          );
-        else
-          content.push(
-            <rect
-              key="center"
-              x={center - strokeWidth / 2}
-              y={center - strokeWidth / 2}
-              width={strokeWidth}
-              height={strokeWidth}
-              fill={strokeColor}
-            />
-          );
-      } else if (cellType === "road_straight_vertical") {
-        content.push(
-          <line
-            key="vertical"
-            x1={center}
-            y1={-1}
-            x2={center}
-            y2={101}
-            stroke={strokeColor}
-            strokeWidth={strokeWidth}
-          />
-        );
-      } else if (cellType === "road_straight_horizontal") {
-        content.push(
-          <line
-            key="horizontal"
-            x1={-1}
-            y1={center}
-            x2={101}
-            y2={center}
-            stroke={strokeColor}
-            strokeWidth={strokeWidth}
-          />
-        );
-      }
-
-      if (flowDirection) {
-        content.push(
-          <React.Fragment key="flow">
-            {renderDirectionArrow(flowDirection)}
-          </React.Fragment>
-        );
-      }
-    }
-  }
-
-  if (carDirection) {
-    content.push(
-      <React.Fragment key="car">{renderCar(carDirection)}</React.Fragment>
-    );
-  }
-
-  return (
-    <svg
-      className="w-full h-full"
-      viewBox="0 0 100 100"
-      xmlns="http://www.w3.org/2000/svg"
-    >
-      {content}
-    </svg>
-  );
-};
-
-// --- Grid Cell ---
-const GridCell = React.memo(
-  ({
-    cellData,
-    row,
-    col,
-    onDrop,
-    onPaint,
-    onRightClick,
-    cellWidth,
-    cellHeight,
-    neighborInfo,
-    isSelected,
-  }) => {
-    const handleDrop = (e) => {
-      e.preventDefault();
-      onDrop(row, col, e.dataTransfer.getData("itemType"));
-    };
-    const handleMouseDown = (e) => {
-      if (e.button === 0) onPaint(row, col);
-    };
-    const handleMouseEnter = (e) => {
-      if (e.buttons === 1) onPaint(row, col);
-    };
-    const handleContextMenu = (e) => {
-      e.preventDefault();
-      onRightClick(row, col);
-    };
-
-    return (
-      <div
-        style={{
-          position: "absolute",
-          left: `${col * cellWidth}px`,
-          top: `${row * cellHeight}px`,
-          width: `${cellWidth}px`,
-          height: `${cellHeight}px`,
-        }}
-        onDragOver={(e) => e.preventDefault()}
-        onDrop={handleDrop}
-        onMouseDown={handleMouseDown}
-        onMouseEnter={handleMouseEnter}
-        onContextMenu={handleContextMenu}
-        className={`flex items-center justify-center cursor-pointer transition-colors duration-75 ${
-          isSelected
-            ? "ring-2 ring-yellow-400 bg-white/10 z-10"
-            : "hover:bg-white/5"
-        }`}
-      >
-        {renderCellContent(cellData, neighborInfo)}
-      </div>
-    );
-  }
-);
-
-// --- Grid ---
-const Grid = ({
-  grid,
-  rows,
-  cols,
-  onDrop,
-  onPaint,
-  setIsMouseDown,
-  onRightClick,
-  selectedCell,
-}) => {
-  // CRITICAL FIX: Guard clause to prevent crash if grid is undefined
-  if (!grid) {
-    return (
-      <div className="flex items-center justify-center h-full text-slate-500">
-        Loading Grid...
-      </div>
-    );
-  }
-
-  const cellWidth = TOTAL_GRID_WIDTH_PX / cols;
-  const cellHeight = TOTAL_GRID_HEIGHT_PX / rows;
-
-  const getIsVerticalRoad = (r, c) =>
-    r >= 0 &&
-    r < rows &&
-    c >= 0 &&
-    c < cols &&
-    grid[r] && // Safety check for row
-    grid[r][c] &&
-    (grid[r][c].type === "road_straight_vertical" ||
-      grid[r][c].type === "road_multilane_vertical" ||
-      grid[r][c].type === "road_divider_vertical"); // ADDED
-
-  const getIsHorizontalRoad = (r, c) =>
-    r >= 0 &&
-    r < rows &&
-    c >= 0 &&
-    c < cols &&
-    grid[r] && // Safety check for row
-    grid[r][c] &&
-    (grid[r][c].type === "road_straight_horizontal" ||
-      grid[r][c].type === "road_multilane_horizontal" ||
-      grid[r][c].type === "road_divider_horizontal"); // ADDED
-
-  const getIsIntersection = (r, c) =>
-    r >= 0 &&
-    r < rows &&
-    c >= 0 &&
-    c < cols &&
-    grid[r] && // Safety check for row
-    grid[r][c] &&
-    grid[r][c].type === "road_intersection";
-
-  return (
-    <div
-      onMouseDown={() => setIsMouseDown(true)}
-      onMouseUp={() => setIsMouseDown(false)}
-      onMouseLeave={() => setIsMouseDown(false)}
-      className="relative bg-slate-100/50 shadow-2xl rounded-sm overflow-hidden flex-shrink-0"
-      style={{
-        userSelect: "none",
-        width: `${TOTAL_GRID_WIDTH_PX}px`,
-        height: `${TOTAL_GRID_HEIGHT_PX}px`,
-        backgroundImage: "radial-gradient(#cbd5e1 1px, transparent 1px)",
-        backgroundSize: `${cellWidth}px ${cellHeight}px`,
-      }}
-    >
-      {grid.flatMap((row, rowIndex) =>
-        row.map((cellData, colIndex) => {
-          const cellType = cellData?.type || null;
-          let neighborInfo = {
-            up: false,
-            down: false,
-            left: false,
-            right: false,
-          };
-
-          // Enhanced neighbor checks to support both standard and multilane roads connecting
-          if (cellType === "road_intersection") {
-            neighborInfo = {
-              up:
-                getIsVerticalRoad(rowIndex - 1, colIndex) ||
-                getIsIntersection(rowIndex - 1, colIndex),
-              down:
-                getIsVerticalRoad(rowIndex + 1, colIndex) ||
-                getIsIntersection(rowIndex + 1, colIndex),
-              left:
-                getIsHorizontalRoad(rowIndex, colIndex - 1) ||
-                getIsIntersection(rowIndex, colIndex - 1),
-              right:
-                getIsHorizontalRoad(rowIndex, colIndex + 1) ||
-                getIsIntersection(rowIndex, colIndex + 1),
-            };
-          }
-
-          // Standard road checks
-          else if (cellType && cellType.includes("vertical")) {
-            neighborInfo = {
-              up:
-                getIsVerticalRoad(rowIndex - 1, colIndex) ||
-                getIsIntersection(rowIndex - 1, colIndex),
-              down:
-                getIsVerticalRoad(rowIndex + 1, colIndex) ||
-                getIsIntersection(rowIndex + 1, colIndex),
-              left: false,
-              right: false,
-            };
-          } else if (cellType && cellType.includes("horizontal")) {
-            neighborInfo = {
-              up: false,
-              down: false,
-              left:
-                getIsHorizontalRoad(rowIndex, colIndex - 1) ||
-                getIsIntersection(rowIndex, colIndex - 1),
-              right:
-                getIsHorizontalRoad(rowIndex, colIndex + 1) ||
-                getIsIntersection(rowIndex, colIndex + 1),
-            };
-          }
-
-          return (
-            <GridCell
-              key={`${rowIndex}-${colIndex}`}
-              cellData={cellData}
-              neighborInfo={neighborInfo}
-              row={rowIndex}
-              col={colIndex}
-              onDrop={onDrop}
-              onPaint={onPaint}
-              onRightClick={onRightClick}
-              cellWidth={cellWidth}
-              cellHeight={cellHeight}
-              isSelected={
-                selectedCell &&
-                selectedCell.row === rowIndex &&
-                selectedCell.col === colIndex
-              }
-            />
-          );
-        })
-      )}
-    </div>
-  );
-};
-
-// --- Palette Item ---
-const PaletteItem = ({ item, isSelected, onClick }) => {
-  const handleDragStart = (e) => e.dataTransfer.setData("itemType", item.type);
-  return (
-    <div
-      draggable
-      onDragStart={handleDragStart}
-      onClick={onClick}
-      className={`relative group aspect-square rounded-2xl flex flex-col items-center justify-center cursor-pointer transition-all duration-300 transform hover:-translate-y-1 ${
-        isSelected
-          ? "bg-slate-700 ring-2 ring-blue-500 shadow-lg shadow-blue-500/20"
-          : "bg-slate-800 hover:bg-slate-700 border border-slate-700"
-      }`}
-    >
-      <div
-        className={`absolute inset-2 rounded-xl opacity-20 bg-gradient-to-br ${item.color}`}
-      ></div>
-      <span className="text-3xl z-10 drop-shadow-sm filter">{item.emoji}</span>
-      <span className="text-[10px] font-medium text-slate-400 mt-2 z-10 uppercase tracking-wide group-hover:text-slate-200 transition-colors">
-        {item.label}
-      </span>
-    </div>
-  );
-};
-
-// --- Login Component (Email/Password Version) ---
-const LoginScreen = () => {
-  const [isRegistering, setIsRegistering] = useState(false);
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [error, setError] = useState(null);
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setError(null);
-    try {
-      if (isRegistering) {
-        await createUserWithEmailAndPassword(auth, email, password);
-      } else {
-        await signInWithEmailAndPassword(auth, email, password);
-      }
-      // Auth listener in App() handles the rest
-    } catch (err) {
-      console.error(err);
-      if (err.code === "auth/invalid-credential") {
-        setError("Invalid email or password.");
-      } else if (err.code === "auth/email-already-in-use") {
-        setError("Email already in use.");
-      } else if (err.code === "auth/weak-password") {
-        setError("Password should be at least 6 characters.");
-      } else {
-        setError("Authentication failed. Try again.");
-      }
-    }
-  };
-
-  return (
-    <div className="flex h-screen w-screen bg-slate-950 items-center justify-center font-sans">
-      <div className="bg-slate-900 border border-slate-800 p-8 rounded-2xl shadow-2xl max-w-md w-full text-center">
-        <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-cyan-400 rounded-xl mx-auto flex items-center justify-center text-4xl shadow-lg shadow-blue-500/20 mb-6">
-          🏗️
-        </div>
-        <h1 className="text-3xl font-bold text-white mb-2">
-          CityBuilder<span className="text-blue-400 font-light">Pro</span>
-        </h1>
-        <p className="text-slate-400 mb-8">
-          {isRegistering
-            ? "Create an account to save cities."
-            : "Sign in to load your layouts."}
-        </p>
-
-        {error && (
-          <div className="bg-red-500/10 border border-red-500/20 text-red-400 text-sm p-3 rounded-lg mb-4">
-            {error}
-          </div>
-        )}
-
-        <form onSubmit={handleSubmit} className="space-y-4 text-left">
-          <div>
-            <label className="text-xs font-bold text-slate-500 uppercase ml-1">
-              Email
-            </label>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="name@example.com"
-              className="w-full mt-1 bg-slate-800 border border-slate-700 rounded-lg p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none transition-all"
-              required
-            />
-          </div>
-          <div>
-            <label className="text-xs font-bold text-slate-500 uppercase ml-1">
-              Password
-            </label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="••••••••"
-              className="w-full mt-1 bg-slate-800 border border-slate-700 rounded-lg p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none transition-all"
-              required
-            />
-          </div>
-
-          <button
-            type="submit"
-            className="w-full py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-bold transition-all shadow-lg shadow-blue-900/20 mt-2"
-          >
-            {isRegistering ? "Sign Up" : "Sign In"}
-          </button>
-        </form>
-
-        <div className="mt-6 pt-6 border-t border-slate-800">
-          <p className="text-slate-400 text-sm">
-            {isRegistering
-              ? "Already have an account?"
-              : "Don't have an account?"}
-            <button
-              onClick={() => {
-                setIsRegistering(!isRegistering);
-                setError(null);
-              }}
-              className="ml-2 text-blue-400 hover:text-blue-300 font-medium transition-colors"
-            >
-              {isRegistering ? "Log In" : "Register"}
-            </button>
-          </p>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-// --- User Profile Modal (With Logout) ---
-const UserProfileModal = ({ user, onClose }) => {
-  const [activeTab, setActiveTab] = useState("profile");
-  const [newEmail, setNewEmail] = useState("");
-  const [currentPassword, setCurrentPassword] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
-  const [status, setStatus] = useState({ type: null, message: null });
-
-  useEffect(() => {
-    setStatus({ type: null, message: null });
-    setNewEmail("");
-    setCurrentPassword("");
-  }, [activeTab]);
-
-  const handleUpdateEmail = async (e) => {
-    e.preventDefault();
-    setStatus({ type: null, message: null });
-    setIsLoading(true);
-
-    if (!newEmail || !currentPassword) {
-      setStatus({ type: "error", message: "Email and password required." });
-      setIsLoading(false);
-      return;
-    }
-
-    try {
-      const cred = EmailAuthProvider.credential(user.email, currentPassword);
-      await reauthenticateWithCredential(user, cred);
-      await verifyBeforeUpdateEmail(user, newEmail);
-
-      setStatus({
-        type: "success",
-        message: `Verification sent to ${newEmail}. Check your inbox!`,
-      });
-      setNewEmail("");
-      setCurrentPassword("");
-    } catch (err) {
-      console.error(err);
-      setStatus({
-        type: "error",
-        message: "Failed to update. Check password.",
-      });
-    }
-    setIsLoading(false);
-  };
-
-  const handlePasswordReset = async () => {
-    setStatus({ type: null, message: null });
-    setIsLoading(true);
-    try {
-      await sendPasswordResetEmail(auth, user.email);
-      setStatus({
-        type: "success",
-        message: `Reset link sent to ${user.email}`,
-      });
-    } catch (err) {
-      console.error(err);
-      setStatus({ type: "error", message: "Failed to send email." });
-    }
-    setIsLoading(false);
-  };
-
-  const handleLogout = async () => {
-    try {
-      await signOut(auth);
-      onClose();
-    } catch (error) {
-      console.error("Error signing out:", error);
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fadeIn">
-      <div className="bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col max-h-[90vh]">
-        {/* Header */}
-        <div className="p-4 border-b border-slate-800 flex justify-between items-center bg-slate-800/50">
-          <h2 className="text-lg font-bold text-white flex items-center gap-2">
-            <div className="p-1.5 bg-blue-500/20 rounded-lg text-blue-400">
-              <UserIcon />
-            </div>
-            Account Settings
-          </h2>
-          <button
-            onClick={onClose}
-            className="p-1 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-white transition-colors"
-          >
-            <XIcon />
-          </button>
-        </div>
-
-        {/* Tabs */}
-        <div className="flex border-b border-slate-800">
-          <button
-            onClick={() => setActiveTab("profile")}
-            className={`flex-1 py-3 text-sm font-medium transition-colors relative ${
-              activeTab === "profile"
-                ? "text-blue-400 bg-slate-800/30"
-                : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/50"
-            }`}
-          >
-            Profile
-            {activeTab === "profile" && (
-              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-500"></div>
-            )}
-          </button>
-          <button
-            onClick={() => setActiveTab("security")}
-            className={`flex-1 py-3 text-sm font-medium transition-colors relative ${
-              activeTab === "security"
-                ? "text-blue-400 bg-slate-800/30"
-                : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/50"
-            }`}
-          >
-            Security
-            {activeTab === "security" && (
-              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-500"></div>
-            )}
-          </button>
-        </div>
-
-        {/* Body */}
-        <div className="p-6 overflow-y-auto custom-scrollbar min-h-[300px]">
-          {status.message && (
-            <div
-              className={`mb-6 p-3 rounded-lg border text-xs font-medium flex items-center gap-2 ${
-                status.type === "success"
-                  ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
-                  : "bg-red-500/10 border-red-500/20 text-red-400"
-              }`}
-            >
-              <span>{status.type === "success" ? "✅" : "⚠️"}</span>
-              {status.message}
-            </div>
-          )}
-
-          {activeTab === "profile" && (
-            <div className="space-y-6 animate-fadeIn">
-              <div className="flex items-center gap-4 p-4 bg-slate-800 rounded-xl border border-slate-700">
-                <div className="w-14 h-14 rounded-full bg-gradient-to-br from-blue-600 to-cyan-500 flex items-center justify-center text-xl font-bold text-white shadow-lg">
-                  {user.email ? user.email[0].toUpperCase() : "U"}
-                </div>
-                <div className="min-w-0">
-                  <div className="text-white font-bold truncate text-sm">
-                    {user.email}
-                  </div>
-                  <div className="text-[10px] text-slate-500 font-mono truncate max-w-[200px] mt-0.5">
-                    ID: {user.uid}
-                  </div>
-                </div>
-              </div>
-
-              <div className="p-5 bg-slate-800 rounded-xl border border-slate-700">
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="p-2 bg-slate-950 rounded text-lg">📧</div>
-                  <div>
-                    <h3 className="text-white font-bold text-sm">
-                      Update Email
-                    </h3>
-                    <p className="text-[10px] text-slate-400">
-                      Confirmation sent to new address.
-                    </p>
-                  </div>
-                </div>
-                <form onSubmit={handleUpdateEmail} className="space-y-3">
-                  <input
-                    type="email"
-                    value={newEmail}
-                    onChange={(e) => setNewEmail(e.target.value)}
-                    placeholder="New Email Address"
-                    className="w-full bg-slate-950 border border-slate-600 rounded-lg p-2.5 text-sm text-white placeholder-slate-500 focus:ring-1 focus:ring-blue-500 outline-none"
-                  />
-                  <input
-                    type="password"
-                    value={currentPassword}
-                    onChange={(e) => setCurrentPassword(e.target.value)}
-                    placeholder="Verify Current Password"
-                    className="w-full bg-slate-950 border border-slate-600 rounded-lg p-2.5 text-sm text-white placeholder-slate-500 focus:ring-1 focus:ring-blue-500 outline-none"
-                  />
-                  <button
-                    type="submit"
-                    disabled={isLoading}
-                    className="w-full py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white rounded-lg font-bold text-xs shadow-lg shadow-blue-900/20"
-                  >
-                    {isLoading ? "Sending..." : "Send Verification Link"}
-                  </button>
-                </form>
-              </div>
-
-              {/* LOGOUT BUTTON ADDED HERE */}
-              <div className="pt-2 border-t border-slate-800">
-                <button
-                  onClick={handleLogout}
-                  className="w-full py-3 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 rounded-lg font-bold text-sm transition-all flex items-center justify-center gap-2"
-                >
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    width="16"
-                    height="16"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
-                    <polyline points="16 17 21 12 16 7"></polyline>
-                    <line x1="21" y1="12" x2="9" y2="12"></line>
-                  </svg>
-                  Sign Out
-                </button>
-              </div>
-            </div>
-          )}
-
-          {activeTab === "security" && (
-            <div className="space-y-6 animate-fadeIn">
-              <div className="p-5 bg-slate-800 rounded-xl border border-slate-700">
-                <div className="flex items-start gap-4">
-                  <div className="p-2 bg-slate-950 rounded text-lg">🔒</div>
-                  <div>
-                    <h3 className="text-white font-bold text-sm">
-                      Reset Password
-                    </h3>
-                    <p className="text-[10px] text-slate-400 mt-1">
-                      Link sent to {user.email}
-                    </p>
-                  </div>
-                </div>
-                <button
-                  onClick={handlePasswordReset}
-                  disabled={isLoading}
-                  className="mt-4 w-full py-2 bg-slate-700 hover:bg-slate-600 text-white border border-slate-600 rounded-lg font-medium text-xs transition-all"
-                >
-                  {isLoading ? "Sending..." : "Send Password Reset Email"}
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-};
-
-// --- Save/Load Modal (Nested Subcollection Version) ---
-const SaveLoadModal = ({
-  mode,
-  onClose,
-  grid,
-  rows,
-  cols,
-  onLoadLayout,
-  currentLayoutId,
-  setCurrentLayoutId,
-  user,
-}) => {
-  const [saveName, setSaveName] = useState("");
-  const [layouts, setLayouts] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState(null);
-
-  useEffect(() => {
-    if (mode === "load") fetchLayouts();
-  }, [mode]);
-
-  // FETCH (GET) - From User Subcollection
-  const fetchLayouts = async () => {
-    setLoading(true);
-    try {
-      // NEW PATH: users -> UID -> layouts
-      const userLayoutsRef = collection(db, "users", user.uid, "layouts");
-      const querySnapshot = await getDocs(userLayoutsRef);
-
-      const loadedLayouts = querySnapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      }));
-      setLayouts(loadedLayouts);
-    } catch (e) {
-      console.error(e);
-      setMessage("Error connecting to Firebase.");
-    }
-    setLoading(false);
-  };
-
-  // SAVE AS NEW (POST) - To User Subcollection
-  const handleSaveNew = async () => {
-    if (!saveName.trim()) return;
-
-    const serializedGrid = JSON.stringify(grid);
-
-    try {
-      // NEW PATH: users -> UID -> layouts
-      const userLayoutsRef = collection(db, "users", user.uid, "layouts");
-
-      const docRef = await addDoc(userLayoutsRef, {
-        name: saveName,
-        description: "",
-        rows,
-        cols,
-        grid_data: serializedGrid,
-        created_at: new Date().toISOString(),
-      });
-
-      setCurrentLayoutId(docRef.id);
-      onClose();
-      alert("Saved as new layout!");
-    } catch (e) {
-      console.error("Firebase Error Details:", e);
-      setMessage("Error saving to Firebase.");
-    }
-  };
-
-  // OVERWRITE (PUT) - Specific Doc in User Subcollection
-  const handleOverwrite = async () => {
-    if (!currentLayoutId) return;
-
-    const serializedGrid = JSON.stringify(grid);
-
-    try {
-      // NEW PATH: users -> UID -> layouts -> LayoutID
-      const layoutRef = doc(db, "users", user.uid, "layouts", currentLayoutId);
-
-      await updateDoc(layoutRef, {
-        rows,
-        cols,
-        grid_data: serializedGrid,
-        updated_at: new Date().toISOString(),
-      });
-
-      onClose();
-      alert("Layout overwritten successfully!");
-    } catch (e) {
-      console.error(e);
-      setMessage("Overwrite failed.");
-    }
-  };
-
-  // DELETE (DELETE) - Specific Doc in User Subcollection
-  const handleDelete = async (id) => {
-    if (!confirm("Delete this layout?")) return;
-    try {
-      // NEW PATH: users -> UID -> layouts -> LayoutID
-      await deleteDoc(doc(db, "users", user.uid, "layouts", id));
-      setLayouts((prev) => prev.filter((l) => l.id !== id));
-      if (id === currentLayoutId) setCurrentLayoutId(null);
-    } catch (e) {
-      console.error(e);
-      setMessage("Delete failed.");
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fadeIn">
-      <div className="bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col max-h-[80vh]">
-        {/* Header */}
-        <div className="p-4 border-b border-slate-800 flex justify-between items-center bg-slate-800/50">
-          <h2 className="text-lg font-bold text-white flex items-center gap-2">
-            {mode === "save" ? (
-              <>
-                <SaveIcon /> Save Layout
-              </>
-            ) : (
-              <>
-                <LoadIcon /> Load Layout
-              </>
-            )}
-          </h2>
-          <button
-            onClick={onClose}
-            className="text-slate-400 hover:text-white transition-colors"
-          >
-            <XIcon />
-          </button>
-        </div>
-
-        {/* Body */}
-        <div className="p-6 overflow-y-auto custom-scrollbar">
-          {message && (
-            <div className="mb-4 p-2 bg-red-900/30 border border-red-500/30 text-red-300 rounded text-sm text-center">
-              {message}
-            </div>
-          )}
-
-          {mode === "save" ? (
-            <div className="space-y-6">
-              {/* Option 1: Overwrite */}
-              {currentLayoutId && (
-                <div className="p-4 bg-emerald-900/20 border border-emerald-500/30 rounded-lg">
-                  <div className="text-xs font-bold text-emerald-400 uppercase mb-2">
-                    Current Layout Loaded
-                  </div>
-                  <button
-                    onClick={handleOverwrite}
-                    className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-bold transition-all shadow-lg shadow-emerald-900/20 flex justify-center items-center gap-2"
-                  >
-                    <SaveIcon /> Overwrite Save
-                  </button>
-                </div>
-              )}
-
-              {currentLayoutId && (
-                <div className="flex items-center gap-2 text-slate-500 text-xs uppercase font-bold">
-                  <div className="h-px bg-slate-700 flex-1"></div>
-                  OR
-                  <div className="h-px bg-slate-700 flex-1"></div>
-                </div>
-              )}
-
-              {/* Option 2: Save As New */}
-              <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">
-                  {currentLayoutId ? "Save as New Layout" : "Layout Name"}
-                </label>
-                <input
-                  type="text"
-                  value={saveName}
-                  onChange={(e) => setSaveName(e.target.value)}
-                  placeholder="My New City"
-                  className="w-full bg-slate-800 border border-slate-600 rounded-lg p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none mb-3"
-                  autoFocus={!currentLayoutId}
-                />
-                <button
-                  onClick={handleSaveNew}
-                  className="w-full py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-bold transition-all shadow-lg shadow-blue-900/20"
-                >
-                  {currentLayoutId ? "Save Copy" : "Save Layout"}
-                </button>
-              </div>
-            </div>
-          ) : (
-            // LOAD MODE
-            <div className="space-y-3">
-              {loading ? (
-                <div className="text-center text-slate-500 py-4">
-                  Loading...
-                </div>
-              ) : layouts.length === 0 ? (
-                <div className="text-center text-slate-500 py-4">
-                  No saved layouts found.
-                </div>
-              ) : (
-                layouts.map((layout) => (
-                  <div
-                    key={layout.id}
-                    className={`group flex justify-between items-center p-3 rounded-lg border transition-all ${
-                      currentLayoutId === layout.id
-                        ? "bg-blue-900/20 border-blue-500/50"
-                        : "bg-slate-800 border-slate-700 hover:border-blue-500/50 hover:bg-slate-750"
-                    }`}
-                  >
-                    <div className="min-w-0">
-                      <div className="font-bold text-slate-200 truncate">
-                        {layout.name}
-                        {currentLayoutId === layout.id && (
-                          <span className="ml-2 text-[10px] text-blue-400 uppercase tracking-wider">
-                            (Active)
-                          </span>
-                        )}
-                      </div>
-                      <div className="text-[10px] text-slate-500">
-                        {/* Display Date safely */}
-                        {layout.created_at
-                          ? new Date(layout.created_at).toLocaleDateString()
-                          : "Unknown Date"}{" "}
-                        • {layout.rows}x{layout.cols}
-                      </div>
-                    </div>
-                    <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <button
-                        onClick={() => {
-                          onLoadLayout(
-                            layout.grid_data,
-                            layout.rows,
-                            layout.cols,
-                            layout.id
-                          );
-                          onClose();
-                        }}
-                        className="p-2 bg-blue-600/20 text-blue-400 hover:bg-blue-600 hover:text-white rounded transition-colors"
-                        title="Load"
-                      >
-                        <LoadIcon />
-                      </button>
-                      <button
-                        onClick={() => handleDelete(layout.id)}
-                        className="p-2 bg-red-600/20 text-red-400 hover:bg-red-600 hover:text-white rounded transition-colors"
-                        title="Delete"
-                      >
-                        <TrashIcon />
-                      </button>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-};
-
-// --- Main App ---
 export default function App() {
+  // --- STATE: Auth ---
   const [user, setUser] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
 
+  // --- STATE: Grid & History ---
   const [rows, setRows] = useState(16);
   const [cols, setCols] = useState(25);
   const [history, setHistory] = useState([createEmptyGrid(16, 25)]);
   const [step, setStep] = useState(0);
 
-  // SAFETY CHECK: Ensure grid is ALWAYS an array to prevent crashes
-  const grid =
-    history && history[step] ? history[step] : createEmptyGrid(rows, cols);
-
+  // --- STATE: Tools & UI ---
   const [selectedTool, setSelectedTool] = useState("select");
   const [isMouseDown, setIsMouseDown] = useState(false);
   const [paletteMode, setPaletteMode] = useState("main");
@@ -1658,18 +69,20 @@ export default function App() {
   const [currentLayoutId, setCurrentLayoutId] = useState(null);
   const [toolLaneCount, setToolLaneCount] = useState(2);
   const [autoSpawnEnabled, setAutoSpawnEnabled] = useState(true);
+  const [activeModal, setActiveModal] = useState(null); // 'save', 'load', 'profile'
 
-  const [activeModal, setActiveModal] = useState(null);
-
-  // REFS
-  const globalTickRef = React.useRef(0);
-  // This ref tracks state independently of React renders to prevent race conditions
-  const simulationState = React.useRef({
+  // --- REFS (Simulation Performance) ---
+  const globalTickRef = useRef(0);
+  const simulationState = useRef({
     history: [createEmptyGrid(16, 25)],
     step: 0,
   });
 
-  // AUTH STATE LISTENER
+  // Safety: Ensure grid is valid
+  const grid =
+    history && history[step] ? history[step] : createEmptyGrid(rows, cols);
+
+  // --- 1. AUTH LISTENER ---
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
@@ -1678,31 +91,30 @@ export default function App() {
     return () => unsubscribe();
   }, []);
 
-  // Sync Ref with State when NOT playing (manual edits)
+  // --- 2. SYNC REFS (When not playing) ---
   useEffect(() => {
     if (!isPlaying) {
       simulationState.current = { history, step };
     }
   }, [history, step, isPlaying]);
 
+  // --- 3. HELPER: Get Cell Safe ---
   const getCell = (g, r, c) => {
     if (r < 0 || r >= g.length || c < 0 || c >= g[0].length) return null;
     return g[r][c];
   };
 
-  // --- NEW: Populate Cars Logic ---
+  // --- 4. LOGIC: Populate Cars ---
   const handlePopulateCars = () => {
     setHistory((prev) => {
       const current = prev[step];
       const newGrid = current.map((row) =>
         row.map((cell) => (cell ? { ...cell } : null))
       );
-      let placedCount = 0;
 
       for (let r = 0; r < rows; r++) {
         for (let c = 0; c < cols; c++) {
           const cell = newGrid[r][c];
-
           if (
             cell &&
             cell.type.startsWith("road") &&
@@ -1719,11 +131,9 @@ export default function App() {
             }
             cell.hasCar = carDir;
             cell.carConfig = { speed: 1, turnBias: "none" };
-            placedCount++;
           }
         }
       }
-      // Update Ref immediately to prevent desync if user clicks Play immediately
       const newHist = [...prev.slice(0, step + 1), newGrid];
       simulationState.current = { history: newHist, step: step + 1 };
       return newHist;
@@ -1731,7 +141,7 @@ export default function App() {
     setStep((s) => s + 1);
   };
 
-  // --- Simulation Loop (Robust Ref-Based) ---
+  // --- 5. LOGIC: Simulation Loop ---
   useEffect(() => {
     if (!isPlaying) return;
 
@@ -1741,24 +151,21 @@ export default function App() {
     const interval = setInterval(() => {
       globalTickRef.current += 1;
 
-      // 1. READ FROM REF (Always accurate, even if React render is lagging)
+      // Read from REF for speed
       const { history: curHistory, step: curStep } = simulationState.current;
       const currentGrid = curHistory[curStep];
 
-      // Safety: If somehow currentGrid is missing, stop to prevent crash
       if (!currentGrid) {
         setIsPlaying(false);
         return;
       }
 
-      // 2. CALCULATE NEXT FRAME
       const newGrid = currentGrid.map((row) =>
         row.map((cell) => (cell ? { ...cell } : null))
       );
-
       const movedCars = new Set();
 
-      // [Auto-Spawn Logic]
+      // [Auto-Spawn]
       if (autoSpawnEnabled && globalTickRef.current % 10 === 0) {
         let attempts = 0;
         while (attempts < 5) {
@@ -1783,7 +190,7 @@ export default function App() {
         }
       }
 
-      // [Traffic Light Logic]
+      // [Traffic Lights]
       if (globalTickRef.current % 5 === 0) {
         for (let r = 0; r < rows; r++) {
           for (let c = 0; c < cols; c++) {
@@ -1807,7 +214,7 @@ export default function App() {
         }
       }
 
-      // [Car Logic]
+      // [Car Movement]
       for (let r = 0; r < rows; r++) {
         for (let c = 0; c < cols; c++) {
           let cell = newGrid[r][c];
@@ -1820,7 +227,6 @@ export default function App() {
 
           if (cell.movementProgress < MOVE_THRESHOLD) continue;
 
-          // ... (Existing Movement Logic) ...
           let direction = cell.hasCar;
           const currentFlow = cell.flowDirection;
 
@@ -1862,12 +268,10 @@ export default function App() {
             if (direction === "left") nextC--;
             if (direction === "right") nextC++;
 
-            // --- OFF-SCREEN LOGIC START ---
             const isOffScreen =
               nextR < 0 || nextR >= rows || nextC < 0 || nextC >= cols;
             let tryToTurn = false;
 
-            // Helper: Check if target accepts entry from direction
             const isTargetCompatible = (tCell, entryDir) => {
               if (!tCell) return false;
               if (tCell.hasCar) return false;
@@ -1886,10 +290,9 @@ export default function App() {
             };
 
             if (isOffScreen) {
-              canMove = true; // Car leaves the map
+              canMove = true;
             } else {
               const targetCell = getCell(newGrid, nextR, nextC);
-
               if (
                 cell.flowDirection &&
                 cell.flowDirection.startsWith("turn_")
@@ -1917,7 +320,6 @@ export default function App() {
             if (!canMove && tryToTurn) {
               const possibleTurns = [];
               const currentFlow = cell.flowDirection;
-
               const checkTurn = (dir) => {
                 if (currentFlow && currentFlow !== dir) return;
                 let dr = 0,
@@ -1942,7 +344,6 @@ export default function App() {
                 const config = cell.carConfig || {};
                 const bias = config.turnBias || "none";
                 let chosenDir = null;
-
                 if (bias !== "none") {
                   const getRelativeDir = (currentFacing, turnType) => {
                     const dirs = ["up", "right", "down", "left"];
@@ -1956,7 +357,6 @@ export default function App() {
                   if (preferredDir && possibleTurns.includes(preferredDir))
                     chosenDir = preferredDir;
                 }
-
                 if (!chosenDir)
                   chosenDir =
                     possibleTurns[
@@ -1986,8 +386,6 @@ export default function App() {
               } else {
                 newGrid[r][c] = null;
               }
-
-              // Only occupy next cell if it is ON SCREEN
               if (newGrid[nextR] && newGrid[nextR][nextC] !== undefined) {
                 const target = newGrid[nextR][nextC];
                 const newCellData = target
@@ -2012,16 +410,11 @@ export default function App() {
         }
       }
 
-      // 3. WRITE TO REF (IMMEDIATELY) AND STATE (FOR RENDER)
-      // Limit history size to prevent memory leaks if running for hours
+      // Memory Management: Truncate history
       let nextHistory = [...curHistory.slice(0, curStep + 1), newGrid];
-      // Optional: Truncate history if > 1000 steps to save memory
       if (nextHistory.length > 500) {
         nextHistory = nextHistory.slice(nextHistory.length - 500);
         simulationState.current = { history: nextHistory, step: 499 };
-
-        // CRITICAL ORDER: Update history FIRST, then step.
-        // This ensures that when React renders, the array is already available.
         setHistory(nextHistory);
         setStep(499);
       } else {
@@ -2034,6 +427,7 @@ export default function App() {
     return () => clearInterval(interval);
   }, [isPlaying, rows, cols, autoSpawnEnabled]);
 
+  // --- 6. LOGIC: Update Grid ---
   const updateGrid = useCallback(
     (row, col, newItemOrType) => {
       if (isPlaying) setIsPlaying(false);
@@ -2043,7 +437,6 @@ export default function App() {
         const newGrid = current.map((r) =>
           r.map((cell) => (cell ? { ...cell } : null))
         );
-
         let updatedCell = newGrid[row][col] || { type: null, hasCar: false };
 
         if (selectedTool === "select") return prev;
@@ -2052,9 +445,7 @@ export default function App() {
           if (updatedCell.hasCar) {
             updatedCell.hasCar = false;
             updatedCell.carConfig = undefined;
-            if (newGrid[row][col]) {
-              newGrid[row][col] = updatedCell;
-            }
+            if (newGrid[row][col]) newGrid[row][col] = updatedCell;
           } else {
             updatedCell = null;
             newGrid[row][col] = null;
@@ -2140,7 +531,6 @@ export default function App() {
           newGrid[row][col] = updatedCell;
         }
 
-        // Sync Ref after manual update
         const newHist = [...prev.slice(0, step + 1), newGrid];
         simulationState.current = { history: newHist, step: step + 1 };
         return newHist;
@@ -2150,6 +540,7 @@ export default function App() {
     [step, selectedTool, isPlaying, rows, cols, toolLaneCount]
   );
 
+  // --- 7. LOGIC: Update Configs ---
   const updateTrafficLightConfig = (row, col, key, value) => {
     setHistory((prev) => {
       const current = prev[step];
@@ -2188,23 +579,20 @@ export default function App() {
     setStep((s) => s + 1);
   };
 
-  // NEW: Update Lane Count setting with Grid Expansion/Contraction
   const updateLaneCount = (row, col, delta) => {
     setHistory((prev) => {
       const current = prev[step];
       const newGrid = current.map((r) =>
         r.map((cell) => (cell ? { ...cell } : null))
       );
-
       const targetCell = newGrid[row][col];
       if (targetCell && targetCell.type.includes("multilane")) {
         const currentLanes = targetCell.laneCount || 2;
         const currentPos = targetCell.lanePosition || 0;
-        const newLanes = Math.max(2, Math.min(6, currentLanes + delta)); // Min 2, Max 6
+        const newLanes = Math.max(2, Math.min(6, currentLanes + delta));
 
-        if (newLanes === currentLanes) return prev; // No change
+        if (newLanes === currentLanes) return prev;
 
-        // 1. Find the "Base" (Lane 0) coordinates
         let baseR = row;
         let baseC = col;
         const isVertical = targetCell.type.includes("vertical");
@@ -2212,7 +600,6 @@ export default function App() {
         if (isVertical) baseC = col - currentPos;
         else baseR = row - currentPos;
 
-        // 2. Re-draw the lanes based on new count
         for (let i = 0; i < Math.max(currentLanes, newLanes); i++) {
           const r = isVertical ? baseR : baseR + i;
           const c = isVertical ? baseC + i : baseC;
@@ -2287,28 +674,22 @@ export default function App() {
       while (queue.length > 0) {
         let [r, c, currDir] = queue.shift();
         const key = `${r},${c}`;
-
         if (visited.has(key)) continue;
         visited.add(key);
-
         const currentCell = newGrid[r][c];
 
         if (currentCell && currentCell.type.startsWith("road")) {
-          // --- 1. LANE HOPPING (Treat Multi-lane as one entity) ---
+          // Lane Hopping
           if (currentCell.type.includes("multilane")) {
             const laneCount = currentCell.laneCount || 2;
             const currentPos = currentCell.lanePosition || 0;
             const isVertical = currentCell.type.includes("vertical");
-
             const baseR = isVertical ? r : r - currentPos;
             const baseC = isVertical ? c - currentPos : c;
-
             for (let i = 0; i < laneCount; i++) {
               if (i === currentPos) continue;
-
               const siblingR = isVertical ? baseR : baseR + i;
               const siblingC = isVertical ? baseC + i : baseC;
-
               const siblingKey = `${siblingR},${siblingC}`;
               if (
                 !visited.has(siblingKey) &&
@@ -2326,14 +707,12 @@ export default function App() {
 
           if (currentCell.type === "road_intersection") {
             currentCell.flowDirection = null;
-
             const potentialExits = [
               { dr: -1, dc: 0, dir: "up" },
               { dr: 1, dc: 0, dir: "down" },
               { dr: 0, dc: -1, dir: "left" },
               { dr: 0, dc: 1, dir: "right" },
             ];
-
             for (const exit of potentialExits) {
               const nr = r + exit.dr;
               const nc = c + exit.dc;
@@ -2352,18 +731,15 @@ export default function App() {
           }
 
           let nextPropDir = currDir;
-
           if (r !== row || c !== col) {
             const cellType = currentCell.type;
             let newFlow = currDir;
-
             if (
               cellType.includes("horizontal") &&
               (currDir === "up" || currDir === "down")
             ) {
               const leftN = getCell(newGrid, r, c - 1);
               const rightN = getCell(newGrid, r, c + 1);
-
               if (leftN && leftN.type.startsWith("road")) {
                 nextPropDir = "left";
                 newFlow = `turn_${currDir}_left`;
@@ -2377,7 +753,6 @@ export default function App() {
             ) {
               const upN = getCell(newGrid, r - 1, c);
               const downN = getCell(newGrid, r + 1, c);
-
               if (upN && upN.type.startsWith("road")) {
                 nextPropDir = "up";
                 newFlow = `turn_${currDir}_up`;
@@ -2448,10 +823,8 @@ export default function App() {
   };
 
   const handleLoadLayout = (loadedGrid, loadedRows, loadedCols, id) => {
-    // FIX: Parse the grid if it's a JSON string
     const parsedGrid =
       typeof loadedGrid === "string" ? JSON.parse(loadedGrid) : loadedGrid;
-
     setRows(loadedRows);
     setCols(loadedCols);
     setHistory([parsedGrid]);
@@ -2461,6 +834,7 @@ export default function App() {
     setCurrentLayoutId(id);
   };
 
+  // Determine active palette
   let currentPaletteItems = MAIN_PALETTE_ITEMS;
   if (paletteMode === "road") currentPaletteItems = ROAD_PALETTE_ITEMS;
   if (paletteMode === "decoration")
@@ -2471,7 +845,7 @@ export default function App() {
     ? grid && grid[selectedCell.row] && grid[selectedCell.row][selectedCell.col]
     : null;
 
-  // --- RENDERING AUTH STATES ---
+  // --- RENDER ---
   if (authLoading) {
     return (
       <div className="flex h-screen w-screen bg-slate-950 items-center justify-center font-sans text-slate-400 animate-pulse">
@@ -2486,7 +860,7 @@ export default function App() {
 
   return (
     <div className="flex h-screen w-screen bg-slate-950 font-sans text-slate-200 overflow-hidden">
-      {/* --- Modal Overlays --- */}
+      {/* --- Modals --- */}
       {activeModal === "save" && (
         <SaveLoadModal
           mode="save"
@@ -2517,7 +891,7 @@ export default function App() {
         <UserProfileModal user={user} onClose={() => setActiveModal(null)} />
       )}
 
-      {/* Sidebar Toggle */}
+      {/* --- Sidebar Mobile Toggle --- */}
       <div className="absolute top-4 left-4 z-50">
         <button
           onClick={() => setIsSidebarOpen(true)}
@@ -2536,13 +910,14 @@ export default function App() {
         />
       )}
 
-      {/* Sidebar - NARROWER WIDTH (w-64) */}
+      {/* --- Main Sidebar --- */}
       <div
         className={`flex-shrink-0 h-full bg-slate-900/95 backdrop-blur-md shadow-2xl z-40 overflow-hidden transition-[width] duration-300 ease-in-out border-r border-slate-800 flex flex-col ${
           isSidebarOpen ? "w-64" : "w-0 border-none"
         }`}
       >
         <div className="w-64 h-full flex flex-col">
+          {/* Header */}
           <div className="p-6 border-b border-slate-800 bg-gradient-to-r from-slate-900 to-slate-800 flex justify-between items-center">
             <div className="flex items-center gap-3">
               <div className="w-8 h-8 rounded bg-gradient-to-br from-blue-500 to-cyan-400 flex items-center justify-center text-lg shadow-lg shadow-blue-500/30">
@@ -2552,7 +927,6 @@ export default function App() {
                 City<span className="text-blue-400 font-light">Pro</span>
               </h1>
             </div>
-            {/* NEW: USER & CLOSE BUTTONS */}
             <div className="flex items-center gap-2">
               <button
                 onClick={() => setActiveModal("profile")}
@@ -2571,8 +945,6 @@ export default function App() {
                   "U"
                 )}
               </button>
-
-              {/* REPLACED EXIT BUTTON WITH CLOSE SIDEBAR BUTTON */}
               <button
                 onClick={() => setIsSidebarOpen(false)}
                 className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-700 rounded-lg transition-colors border border-transparent hover:border-slate-600"
@@ -2584,7 +956,7 @@ export default function App() {
           </div>
 
           <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
-            {/* Tool Settings Panel (When no cell selected, but Multi-Lane Tool is active) */}
+            {/* --- PROPERTIES PANEL: Multi-Lane Tool --- */}
             {!selectedCell &&
               selectedTool &&
               selectedTool.includes("multilane") && (
@@ -2618,13 +990,10 @@ export default function App() {
                       </button>
                     </div>
                   </div>
-                  <div className="mt-2 text-[10px] text-slate-500">
-                    Click on the grid to place a {toolLaneCount}-lane road.
-                  </div>
                 </div>
               )}
 
-            {/* Properties Panel: Multi-Lane Road Settings (NEW) */}
+            {/* --- PROPERTIES PANEL: Selected Multi-Lane Road --- */}
             {selectedCell &&
               selectedCellData &&
               selectedCellData.type &&
@@ -2672,7 +1041,7 @@ export default function App() {
                 </div>
               )}
 
-            {/* Properties Panel: Traffic Light */}
+            {/* --- PROPERTIES PANEL: Traffic Light --- */}
             {selectedCell &&
               selectedCellData &&
               selectedCellData.type === "traffic_light" && (
@@ -2689,68 +1058,30 @@ export default function App() {
                     </button>
                   </div>
                   <div className="space-y-3">
-                    <p className="text-[10px] text-slate-400">
-                      Position: {selectedCell.row}, {selectedCell.col}
-                    </p>
-
                     <div className="grid grid-cols-3 gap-2">
-                      <div>
-                        <label className="text-[10px] text-green-400 block mb-1">
-                          Green
-                        </label>
-                        <input
-                          type="number"
-                          min="1"
-                          value={selectedCellData.config?.green || 10}
-                          onChange={(e) =>
-                            updateTrafficLightConfig(
-                              selectedCell.row,
-                              selectedCell.col,
-                              "green",
-                              e.target.value
-                            )
-                          }
-                          className="w-full bg-slate-900 border border-slate-600 rounded p-1 text-xs text-center text-white"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-[10px] text-yellow-400 block mb-1">
-                          Yellow
-                        </label>
-                        <input
-                          type="number"
-                          min="1"
-                          value={selectedCellData.config?.yellow || 4}
-                          onChange={(e) =>
-                            updateTrafficLightConfig(
-                              selectedCell.row,
-                              selectedCell.col,
-                              "yellow",
-                              e.target.value
-                            )
-                          }
-                          className="w-full bg-slate-900 border border-slate-600 rounded p-1 text-xs text-center text-white"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-[10px] text-red-400 block mb-1">
-                          Red
-                        </label>
-                        <input
-                          type="number"
-                          min="1"
-                          value={selectedCellData.config?.red || 10}
-                          onChange={(e) =>
-                            updateTrafficLightConfig(
-                              selectedCell.row,
-                              selectedCell.col,
-                              "red",
-                              e.target.value
-                            )
-                          }
-                          className="w-full bg-slate-900 border border-slate-600 rounded p-1 text-xs text-center text-white"
-                        />
-                      </div>
+                      {["green", "yellow", "red"].map((color) => (
+                        <div key={color}>
+                          <label
+                            className={`text-[10px] text-${color}-400 block mb-1 capitalize`}
+                          >
+                            {color}
+                          </label>
+                          <input
+                            type="number"
+                            min="1"
+                            value={selectedCellData.config?.[color] || 10}
+                            onChange={(e) =>
+                              updateTrafficLightConfig(
+                                selectedCell.row,
+                                selectedCell.col,
+                                color,
+                                e.target.value
+                              )
+                            }
+                            className="w-full bg-slate-900 border border-slate-600 rounded p-1 text-xs text-center text-white"
+                          />
+                        </div>
+                      ))}
                     </div>
                     <div className="bg-slate-900 p-2 rounded flex justify-between items-center">
                       <span className="text-xs text-slate-500">
@@ -2773,7 +1104,7 @@ export default function App() {
                 </div>
               )}
 
-            {/* Properties Panel: Car Settings */}
+            {/* --- PROPERTIES PANEL: Car Settings --- */}
             {selectedCell && selectedCellData && selectedCellData.hasCar && (
               <div className="mb-6 p-4 bg-slate-800 rounded-xl border-l-4 border-orange-500 shadow-md animate-fadeIn">
                 <div className="flex justify-between items-center mb-3">
@@ -2788,7 +1119,6 @@ export default function App() {
                   </button>
                 </div>
                 <div className="space-y-4">
-                  {/* Speed Control */}
                   <div>
                     <div className="flex justify-between text-[10px] text-slate-400 mb-1">
                       <span>Speed</span>
@@ -2811,75 +1141,46 @@ export default function App() {
                       className="w-full accent-orange-500 h-1 bg-slate-700 rounded-lg appearance-none cursor-pointer"
                     />
                   </div>
-
-                  {/* Turn Bias */}
                   <div>
                     <label className="text-[10px] text-slate-400 block mb-2">
                       Turn Priority
                     </label>
                     <div className="grid grid-cols-3 gap-2">
-                      <button
-                        onClick={() =>
-                          updateCarConfig(
-                            selectedCell.row,
-                            selectedCell.col,
-                            "turnBias",
-                            "left"
-                          )
-                        }
-                        className={`p-2 rounded text-xs border ${
-                          selectedCellData.carConfig?.turnBias === "left"
-                            ? "bg-orange-600 border-orange-400 text-white"
-                            : "bg-slate-700 border-slate-600 text-slate-400"
-                        }`}
-                      >
-                        ⬅ Left
-                      </button>
-                      <button
-                        onClick={() =>
-                          updateCarConfig(
-                            selectedCell.row,
-                            selectedCell.col,
-                            "turnBias",
-                            "none"
-                          )
-                        }
-                        className={`p-2 rounded text-xs border ${
-                          !selectedCellData.carConfig?.turnBias ||
-                          selectedCellData.carConfig?.turnBias === "none"
-                            ? "bg-orange-600 border-orange-400 text-white"
-                            : "bg-slate-700 border-slate-600 text-slate-400"
-                        }`}
-                      >
-                        None
-                      </button>
-                      <button
-                        onClick={() =>
-                          updateCarConfig(
-                            selectedCell.row,
-                            selectedCell.col,
-                            "turnBias",
-                            "right"
-                          )
-                        }
-                        className={`p-2 rounded text-xs border ${
-                          selectedCellData.carConfig?.turnBias === "right"
-                            ? "bg-orange-600 border-orange-400 text-white"
-                            : "bg-slate-700 border-slate-600 text-slate-400"
-                        }`}
-                      >
-                        Right ➡
-                      </button>
+                      {["left", "none", "right"].map((bias) => (
+                        <button
+                          key={bias}
+                          onClick={() =>
+                            updateCarConfig(
+                              selectedCell.row,
+                              selectedCell.col,
+                              "turnBias",
+                              bias
+                            )
+                          }
+                          className={`p-2 rounded text-xs border capitalize ${
+                            (selectedCellData.carConfig?.turnBias || "none") ===
+                            bias
+                              ? "bg-orange-600 border-orange-400 text-white"
+                              : "bg-slate-700 border-slate-600 text-slate-400"
+                          }`}
+                        >
+                          {bias === "left"
+                            ? "⬅ Left"
+                            : bias === "right"
+                            ? "Right ➡"
+                            : "None"}
+                        </button>
+                      ))}
                     </div>
                   </div>
                 </div>
               </div>
             )}
 
-            {/* Properties Panel: Road Flow Control */}
+            {/* --- PROPERTIES PANEL: Traffic Flow --- */}
             {selectedCell &&
               selectedCellData &&
-              selectedCellData.type && // Added Null Check
+              selectedCellData.type &&
               selectedCellData.type.startsWith("road") && (
                 <div className="mb-6 p-4 bg-slate-800 rounded-xl border-l-4 border-emerald-500 shadow-md animate-fadeIn">
                   <div className="flex justify-between items-center mb-3">
@@ -2894,7 +1195,6 @@ export default function App() {
                     </button>
                   </div>
                   <div className="space-y-3">
-                    {/* Straight Flows */}
                     <div className="grid grid-cols-5 gap-1 mb-2">
                       <button
                         onClick={() =>
@@ -2912,72 +1212,32 @@ export default function App() {
                       >
                         Any
                       </button>
-                      <button
-                        onClick={() =>
-                          updateRoadFlow(
-                            selectedCell.row,
-                            selectedCell.col,
-                            "up"
-                          )
-                        }
-                        className={`p-1 rounded text-lg border ${
-                          selectedCellData.flowDirection === "up"
-                            ? "bg-emerald-600"
-                            : "bg-slate-700"
-                        }`}
-                      >
-                        ⬆️
-                      </button>
-                      <button
-                        onClick={() =>
-                          updateRoadFlow(
-                            selectedCell.row,
-                            selectedCell.col,
-                            "down"
-                          )
-                        }
-                        className={`p-1 rounded text-lg border ${
-                          selectedCellData.flowDirection === "down"
-                            ? "bg-emerald-600"
-                            : "bg-slate-700"
-                        }`}
-                      >
-                        ⬇️
-                      </button>
-                      <button
-                        onClick={() =>
-                          updateRoadFlow(
-                            selectedCell.row,
-                            selectedCell.col,
-                            "left"
-                          )
-                        }
-                        className={`p-1 rounded text-lg border ${
-                          selectedCellData.flowDirection === "left"
-                            ? "bg-emerald-600"
-                            : "bg-slate-700"
-                        }`}
-                      >
-                        ⬅️
-                      </button>
-                      <button
-                        onClick={() =>
-                          updateRoadFlow(
-                            selectedCell.row,
-                            selectedCell.col,
-                            "right"
-                          )
-                        }
-                        className={`p-1 rounded text-lg border ${
-                          selectedCellData.flowDirection === "right"
-                            ? "bg-emerald-600"
-                            : "bg-slate-700"
-                        }`}
-                      >
-                        ➡️
-                      </button>
+                      {["up", "down", "left", "right"].map((dir) => (
+                        <button
+                          key={dir}
+                          onClick={() =>
+                            updateRoadFlow(
+                              selectedCell.row,
+                              selectedCell.col,
+                              dir
+                            )
+                          }
+                          className={`p-1 rounded text-lg border ${
+                            selectedCellData.flowDirection === dir
+                              ? "bg-emerald-600"
+                              : "bg-slate-700"
+                          }`}
+                        >
+                          {dir === "up"
+                            ? "⬆️"
+                            : dir === "down"
+                            ? "⬇️"
+                            : dir === "left"
+                            ? "⬅️"
+                            : "➡️"}
+                        </button>
+                      ))}
                     </div>
-
                     <div className="pt-2 border-t border-slate-700 mt-2">
                       <button
                         onClick={() =>
@@ -2996,38 +1256,7 @@ export default function App() {
                 </div>
               )}
 
-            {/* Standard Selected Cell Info (Fallback) */}
-            {selectedCell &&
-              selectedCellData &&
-              selectedCellData.type && // Added null check
-              !selectedCellData.type.startsWith("road") &&
-              selectedCellData.type !== "traffic_light" && (
-                <div className="mb-6 p-4 bg-slate-800 rounded-xl border border-slate-700">
-                  <div className="flex justify-between items-center">
-                    <h2 className="text-xs font-bold text-slate-500 uppercase">
-                      Selected Cell
-                    </h2>
-                    <button
-                      onClick={() => setSelectedCell(null)}
-                      className="text-xs text-slate-400 hover:text-white"
-                    >
-                      ✕
-                    </button>
-                  </div>
-                  <div className="mt-2 text-sm text-slate-300">
-                    Type:{" "}
-                    <span className="text-blue-400 font-mono">
-                      {selectedCellData.type}
-                    </span>
-                    {selectedCellData.hasCar && (
-                      <div className="mt-1 text-xs text-orange-400">
-                        Contains Car
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-
+            {/* --- Helper Text --- */}
             {!selectedCell && (
               <div className="mb-6 p-4 border border-dashed border-slate-700 rounded-xl text-center">
                 <p className="text-xs text-slate-500">
@@ -3037,7 +1266,7 @@ export default function App() {
               </div>
             )}
 
-            {/* Tools Palette - 2 COLUMNS */}
+            {/* --- Tools Palette --- */}
             <div className="mb-8">
               <h2 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3 ml-1">
                 Tools & Objects
@@ -3071,11 +1300,14 @@ export default function App() {
                         setSelectedTool(item.type);
                       }
                       if (
-                        item.type !== "select" &&
-                        item.type !== "populate_cars" &&
-                        item.type !== "toggle_autospawn"
-                      )
+                        ![
+                          "select",
+                          "populate_cars",
+                          "toggle_autospawn",
+                        ].includes(item.type)
+                      ) {
                         setSelectedCell(null);
+                      }
                     }}
                   />
                 ))}
@@ -3083,7 +1315,7 @@ export default function App() {
             </div>
           </div>
 
-          {/* FIXED FOOTER for Back Button */}
+          {/* Footer: Back Button */}
           {paletteMode !== "main" && (
             <div className="p-4 border-t border-slate-800 bg-slate-900">
               <button
@@ -3101,9 +1333,9 @@ export default function App() {
         </div>
       </div>
 
-      {/* Main Stage */}
+      {/* --- Main Stage --- */}
       <div className="flex-1 relative overflow-hidden bg-slate-950 flex flex-col min-w-0">
-        {/* Floating Controls Toolbar - Bottom Right */}
+        {/* Floating Controls: Bottom Right */}
         <div className="absolute bottom-8 right-8 z-50 flex items-center gap-2 p-2 bg-slate-900/90 backdrop-blur-md border border-slate-700 rounded-2xl shadow-2xl">
           <button
             onClick={() => setStep((s) => Math.max(0, s - 1))}
@@ -3121,9 +1353,7 @@ export default function App() {
           >
             <RedoIcon />
           </button>
-
           <div className="w-px h-6 bg-slate-700 mx-1"></div>
-
           <button
             onClick={() => setActiveModal("save")}
             className="p-3 text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/20 rounded-xl transition-colors"
@@ -3138,9 +1368,7 @@ export default function App() {
           >
             <LoadIcon />
           </button>
-
           <div className="w-px h-6 bg-slate-700 mx-1"></div>
-
           <button
             onClick={() => {
               if (confirm("Clear entire grid? This cannot be undone.")) {
@@ -3159,7 +1387,7 @@ export default function App() {
           </button>
         </div>
 
-        {/* Top Controls */}
+        {/* Floating Controls: Top Center */}
         <div className="absolute top-4 left-0 right-0 z-20 flex justify-center pointer-events-none">
           <div className="flex items-center gap-4 px-6 py-3 bg-slate-900/90 backdrop-blur-md rounded-full border border-slate-700 shadow-2xl pointer-events-auto">
             <div className="hidden md:block mr-4 pr-4 border-r border-slate-700 text-xs text-slate-400">
@@ -3191,6 +1419,7 @@ export default function App() {
           </div>
         </div>
 
+        {/* Grid Canvas */}
         <div className="flex-1 flex items-center justify-center p-8 overflow-auto">
           <Grid
             grid={grid}
