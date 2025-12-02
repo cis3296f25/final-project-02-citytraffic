@@ -195,6 +195,12 @@ const MAIN_PALETTE_ITEMS = [
     color: "from-green-500 to-emerald-400",
   },
   {
+    type: "random_menu",
+    label: "Randomize",
+    emoji: "🎲",
+    color: "from-violet-500 to-fuchsia-400",
+  },
+  {
     type: "car",
     label: "Car",
     emoji: "🚗",
@@ -273,6 +279,22 @@ const DECORATION_PALETTE_ITEMS = [
     label: "Tree",
     emoji: "🌳",
     color: "from-green-500 to-emerald-400",
+  },
+];
+
+// --- NEW RANDOMIZER PALETTE ---
+const RANDOM_PALETTE_ITEMS = [
+  {
+    type: "populate_cars",
+    label: "Populate Now",
+    emoji: "✨",
+    color: "from-violet-500 to-indigo-500",
+  },
+  {
+    type: "toggle_autospawn",
+    label: "Auto Spawn",
+    emoji: "🔄",
+    color: "from-fuchsia-500 to-pink-500",
   },
 ];
 
@@ -839,6 +861,15 @@ const Grid = ({
   onRightClick,
   selectedCell,
 }) => {
+  // CRITICAL FIX: Guard clause to prevent crash if grid is undefined
+  if (!grid) {
+    return (
+      <div className="flex items-center justify-center h-full text-slate-500">
+        Loading Grid...
+      </div>
+    );
+  }
+
   const cellWidth = TOTAL_GRID_WIDTH_PX / cols;
   const cellHeight = TOTAL_GRID_HEIGHT_PX / rows;
 
@@ -847,6 +878,7 @@ const Grid = ({
     r < rows &&
     c >= 0 &&
     c < cols &&
+    grid[r] && // Safety check for row
     grid[r][c] &&
     (grid[r][c].type === "road_straight_vertical" ||
       grid[r][c].type === "road_multilane_vertical" ||
@@ -857,6 +889,7 @@ const Grid = ({
     r < rows &&
     c >= 0 &&
     c < cols &&
+    grid[r] && // Safety check for row
     grid[r][c] &&
     (grid[r][c].type === "road_straight_horizontal" ||
       grid[r][c].type === "road_multilane_horizontal" ||
@@ -867,6 +900,7 @@ const Grid = ({
     r < rows &&
     c >= 0 &&
     c < cols &&
+    grid[r] && // Safety check for row
     grid[r][c] &&
     grid[r][c].type === "road_intersection";
 
@@ -1609,7 +1643,10 @@ export default function App() {
   const [cols, setCols] = useState(25);
   const [history, setHistory] = useState([createEmptyGrid(16, 25)]);
   const [step, setStep] = useState(0);
-  const grid = history[step];
+
+  // SAFETY CHECK: Ensure grid is ALWAYS an array to prevent crashes
+  const grid =
+    history && history[step] ? history[step] : createEmptyGrid(rows, cols);
 
   const [selectedTool, setSelectedTool] = useState("select");
   const [isMouseDown, setIsMouseDown] = useState(false);
@@ -1619,9 +1656,18 @@ export default function App() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [selectedCell, setSelectedCell] = useState(null);
   const [currentLayoutId, setCurrentLayoutId] = useState(null);
-  const [toolLaneCount, setToolLaneCount] = useState(2); // State for "Tool Config"
+  const [toolLaneCount, setToolLaneCount] = useState(2);
+  const [autoSpawnEnabled, setAutoSpawnEnabled] = useState(true);
 
   const [activeModal, setActiveModal] = useState(null);
+
+  // REFS
+  const globalTickRef = React.useRef(0);
+  // This ref tracks state independently of React renders to prevent race conditions
+  const simulationState = React.useRef({
+    history: [createEmptyGrid(16, 25)],
+    step: 0,
+  });
 
   // AUTH STATE LISTENER
   useEffect(() => {
@@ -1632,27 +1678,117 @@ export default function App() {
     return () => unsubscribe();
   }, []);
 
+  // Sync Ref with State when NOT playing (manual edits)
+  useEffect(() => {
+    if (!isPlaying) {
+      simulationState.current = { history, step };
+    }
+  }, [history, step, isPlaying]);
+
   const getCell = (g, r, c) => {
     if (r < 0 || r >= g.length || c < 0 || c >= g[0].length) return null;
     return g[r][c];
   };
 
+  // --- NEW: Populate Cars Logic ---
+  const handlePopulateCars = () => {
+    setHistory((prev) => {
+      const current = prev[step];
+      const newGrid = current.map((row) =>
+        row.map((cell) => (cell ? { ...cell } : null))
+      );
+      let placedCount = 0;
+
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          const cell = newGrid[r][c];
+
+          if (
+            cell &&
+            cell.type.startsWith("road") &&
+            !cell.hasCar &&
+            Math.random() < 0.2
+          ) {
+            let carDir = "right";
+            if (cell.flowDirection && !cell.flowDirection.startsWith("turn")) {
+              carDir = cell.flowDirection;
+            } else if (cell.type.includes("vertical")) {
+              carDir = Math.random() > 0.5 ? "up" : "down";
+            } else if (cell.type.includes("horizontal")) {
+              carDir = Math.random() > 0.5 ? "left" : "right";
+            }
+            cell.hasCar = carDir;
+            cell.carConfig = { speed: 1, turnBias: "none" };
+            placedCount++;
+          }
+        }
+      }
+      // Update Ref immediately to prevent desync if user clicks Play immediately
+      const newHist = [...prev.slice(0, step + 1), newGrid];
+      simulationState.current = { history: newHist, step: step + 1 };
+      return newHist;
+    });
+    setStep((s) => s + 1);
+  };
+
+  // --- Simulation Loop (Robust Ref-Based) ---
   useEffect(() => {
     if (!isPlaying) return;
-    const interval = setInterval(() => {
-      setHistory((prev) => {
-        const current = prev[step];
-        const newGrid = current.map((row) =>
-          row.map((cell) => (cell ? { ...cell } : null))
-        );
-        const movedCars = new Set();
 
+    const SIMULATION_TICK_MS = 100;
+    const MOVE_THRESHOLD = 500;
+
+    const interval = setInterval(() => {
+      globalTickRef.current += 1;
+
+      // 1. READ FROM REF (Always accurate, even if React render is lagging)
+      const { history: curHistory, step: curStep } = simulationState.current;
+      const currentGrid = curHistory[curStep];
+
+      // Safety: If somehow currentGrid is missing, stop to prevent crash
+      if (!currentGrid) {
+        setIsPlaying(false);
+        return;
+      }
+
+      // 2. CALCULATE NEXT FRAME
+      const newGrid = currentGrid.map((row) =>
+        row.map((cell) => (cell ? { ...cell } : null))
+      );
+
+      const movedCars = new Set();
+
+      // [Auto-Spawn Logic]
+      if (autoSpawnEnabled && globalTickRef.current % 10 === 0) {
+        let attempts = 0;
+        while (attempts < 5) {
+          const r = Math.floor(Math.random() * rows);
+          const c = Math.floor(Math.random() * cols);
+          const cell = newGrid[r][c];
+          if (cell && cell.type.startsWith("road") && !cell.hasCar) {
+            let spawnDir = "right";
+            if (cell.flowDirection && !cell.flowDirection.startsWith("turn"))
+              spawnDir = cell.flowDirection;
+            else if (cell.type.includes("vertical"))
+              spawnDir = Math.random() > 0.5 ? "up" : "down";
+            else if (cell.type.includes("horizontal"))
+              spawnDir = Math.random() > 0.5 ? "left" : "right";
+
+            cell.hasCar = spawnDir;
+            cell.carConfig = { speed: 1, turnBias: "none" };
+            cell.movementProgress = Math.random() * 400;
+            break;
+          }
+          attempts++;
+        }
+      }
+
+      // [Traffic Light Logic]
+      if (globalTickRef.current % 5 === 0) {
         for (let r = 0; r < rows; r++) {
           for (let c = 0; c < cols; c++) {
             let cell = newGrid[r][c];
-            if (!cell) continue;
-
-            if (cell.type === "traffic_light") {
+            if (cell && cell.type === "traffic_light") {
               if (!cell.config) cell.config = { green: 10, yellow: 4, red: 10 };
               if (!cell.state) cell.state = "green";
               if (cell.timer === undefined) cell.timer = 0;
@@ -1667,209 +1803,236 @@ export default function App() {
                 else if (cell.state === "red") cell.state = "green";
               }
             }
-
-            if (cell.hasCar && !movedCars.has(`${r},${c}`)) {
-              let direction = cell.hasCar; // CHANGED to let for modification
-              const currentFlow = cell.flowDirection;
-
-              // --- WRONG WAY CORRECTION ---
-              if (currentFlow) {
-                if (currentFlow === "left" && direction === "right")
-                  direction = "left";
-                else if (currentFlow === "right" && direction === "left")
-                  direction = "right";
-                else if (currentFlow === "up" && direction === "down")
-                  direction = "up";
-                else if (currentFlow === "down" && direction === "up")
-                  direction = "down";
-              }
-
-              let canMove = false;
-              let nextR = r,
-                nextC = c,
-                nextDir = direction;
-
-              let isBlockedByLight = false;
-              const adjOffsets = [
-                { dr: -1, dc: 0 },
-                { dr: 1, dc: 0 },
-                { dr: 0, dc: -1 },
-                { dr: 0, dc: 1 },
-              ];
-
-              for (const offset of adjOffsets) {
-                const neighbor = getCell(newGrid, r + offset.dr, c + offset.dc);
-                if (neighbor && neighbor.type === "traffic_light") {
-                  const state = neighbor.state || "green";
-                  if (state === "yellow" || state === "red") {
-                    isBlockedByLight = true;
-                  }
-                }
-              }
-
-              if (!isBlockedByLight) {
-                if (direction === "up") nextR--;
-                if (direction === "down") nextR++;
-                if (direction === "left") nextC--;
-                if (direction === "right") nextC++;
-
-                const targetCell = getCell(newGrid, nextR, nextC);
-                let tryToTurn = false;
-
-                const isTargetCompatible = (tCell, entryDir) => {
-                  if (!tCell) return false;
-                  if (tCell.hasCar) return false;
-                  if (tCell.type === "traffic_light") return false;
-                  if (!tCell.type.startsWith("road")) return false;
-
-                  if (tCell.flowDirection) {
-                    if (tCell.flowDirection.startsWith("turn_")) {
-                      const entry = tCell.flowDirection.split("_")[1];
-                      return entryDir === entry;
-                    } else {
-                      return tCell.flowDirection === entryDir;
-                    }
-                  }
-                  return true;
-                };
-
-                if (
-                  cell.flowDirection &&
-                  cell.flowDirection.startsWith("turn_")
-                ) {
-                  const parts = cell.flowDirection.split("_");
-                  const exit = parts[2];
-                  nextDir = exit;
-                  nextR = r;
-                  nextC = c;
-                  if (nextDir === "up") nextR--;
-                  if (nextDir === "down") nextR++;
-                  if (nextDir === "left") nextC--;
-                  if (nextDir === "right") nextC++;
-
-                  if (
-                    isTargetCompatible(getCell(newGrid, nextR, nextC), nextDir)
-                  ) {
-                    canMove = true;
-                  }
-                } else if (targetCell && targetCell.type.startsWith("road")) {
-                  if (isTargetCompatible(targetCell, nextDir)) {
-                    canMove = true;
-                  } else {
-                    tryToTurn = true;
-                  }
-                } else {
-                  tryToTurn = true;
-                }
-
-                if (!canMove && tryToTurn) {
-                  const possibleTurns = [];
-                  const currentFlow = cell.flowDirection;
-
-                  const checkTurn = (dir) => {
-                    if (currentFlow && currentFlow !== dir) return;
-                    let dr = 0,
-                      dc = 0;
-                    if (dir === "up") dr = -1;
-                    if (dir === "down") dr = 1;
-                    if (dir === "left") dc = -1;
-                    if (dir === "right") dc = 1;
-                    const t = getCell(newGrid, r + dr, c + dc);
-                    if (isTargetCompatible(t, dir)) possibleTurns.push(dir);
-                  };
-
-                  if (direction === "up" || direction === "down") {
-                    checkTurn("left");
-                    checkTurn("right");
-                  } else {
-                    checkTurn("up");
-                    checkTurn("down");
-                  }
-
-                  if (possibleTurns.length > 0) {
-                    const config = cell.carConfig || {};
-                    const bias = config.turnBias || "none";
-                    let chosenDir = null;
-
-                    if (bias !== "none") {
-                      const getRelativeDir = (currentFacing, turnType) => {
-                        const dirs = ["up", "right", "down", "left"];
-                        const idx = dirs.indexOf(currentFacing);
-                        if (idx === -1) return null;
-                        if (turnType === "left") return dirs[(idx + 3) % 4];
-                        if (turnType === "right") return dirs[(idx + 1) % 4];
-                        return null;
-                      };
-                      const preferredDir = getRelativeDir(direction, bias);
-                      if (
-                        preferredDir &&
-                        possibleTurns.includes(preferredDir)
-                      ) {
-                        chosenDir = preferredDir;
-                      }
-                    }
-
-                    if (!chosenDir) {
-                      chosenDir =
-                        possibleTurns[
-                          Math.floor(Math.random() * possibleTurns.length)
-                        ];
-                    }
-
-                    nextDir = chosenDir;
-                    nextR = r;
-                    nextC = c;
-                    if (nextDir === "up") nextR--;
-                    if (nextDir === "down") nextR++;
-                    if (nextDir === "left") nextC--;
-                    if (nextDir === "right") nextC++;
-                    canMove = true;
-                  }
-                }
-
-                if (canMove) {
-                  const movingConfig = cell.carConfig;
-
-                  if (cell.type) {
-                    newGrid[r][c] = {
-                      ...cell,
-                      hasCar: false,
-                      carConfig: undefined,
-                    };
-                  } else {
-                    newGrid[r][c] = null;
-                  }
-
-                  if (newGrid[nextR] && newGrid[nextR][nextC] !== undefined) {
-                    const target = newGrid[nextR][nextC];
-                    if (!target) {
-                      newGrid[nextR][nextC] = {
-                        type: "road_straight_horizontal",
-                        hasCar: nextDir,
-                        carConfig: movingConfig,
-                      };
-                    } else {
-                      newGrid[nextR][nextC] = {
-                        ...target,
-                        hasCar: nextDir,
-                        carConfig: movingConfig,
-                      };
-                    }
-                    movedCars.add(`${nextR},${nextC}`);
-                  }
-                } else {
-                  newGrid[r][c] = { ...cell, hasCar: nextDir };
-                }
-              }
-            }
           }
         }
-        return [...prev.slice(0, step + 1), newGrid];
-      });
-      setStep((s) => s + 1);
-    }, 500);
+      }
+
+      // [Car Logic]
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          let cell = newGrid[r][c];
+          if (!cell || !cell.hasCar) continue;
+          if (movedCars.has(`${r},${c}`)) continue;
+
+          if (cell.movementProgress === undefined) cell.movementProgress = 0;
+          const speed = cell.carConfig?.speed || 1;
+          cell.movementProgress += speed * SIMULATION_TICK_MS;
+
+          if (cell.movementProgress < MOVE_THRESHOLD) continue;
+
+          // ... (Existing Movement Logic) ...
+          let direction = cell.hasCar;
+          const currentFlow = cell.flowDirection;
+
+          if (currentFlow) {
+            if (currentFlow === "left" && direction === "right")
+              direction = "left";
+            else if (currentFlow === "right" && direction === "left")
+              direction = "right";
+            else if (currentFlow === "up" && direction === "down")
+              direction = "up";
+            else if (currentFlow === "down" && direction === "up")
+              direction = "down";
+          }
+
+          let canMove = false;
+          let nextR = r,
+            nextC = c,
+            nextDir = direction;
+
+          let isBlockedByLight = false;
+          const adjOffsets = [
+            { dr: -1, dc: 0 },
+            { dr: 1, dc: 0 },
+            { dr: 0, dc: -1 },
+            { dr: 0, dc: 1 },
+          ];
+          for (const offset of adjOffsets) {
+            const neighbor = getCell(newGrid, r + offset.dr, c + offset.dc);
+            if (neighbor && neighbor.type === "traffic_light") {
+              const state = neighbor.state || "green";
+              if (state === "yellow" || state === "red")
+                isBlockedByLight = true;
+            }
+          }
+
+          if (!isBlockedByLight) {
+            if (direction === "up") nextR--;
+            if (direction === "down") nextR++;
+            if (direction === "left") nextC--;
+            if (direction === "right") nextC++;
+
+            // --- OFF-SCREEN LOGIC START ---
+            const isOffScreen =
+              nextR < 0 || nextR >= rows || nextC < 0 || nextC >= cols;
+            let tryToTurn = false;
+
+            // Helper: Check if target accepts entry from direction
+            const isTargetCompatible = (tCell, entryDir) => {
+              if (!tCell) return false;
+              if (tCell.hasCar) return false;
+              if (tCell.type === "traffic_light") return false;
+              if (!tCell.type.startsWith("road")) return false;
+
+              if (tCell.flowDirection) {
+                if (tCell.flowDirection.startsWith("turn_")) {
+                  const entry = tCell.flowDirection.split("_")[1];
+                  return entryDir === entry;
+                } else {
+                  return tCell.flowDirection === entryDir;
+                }
+              }
+              return true;
+            };
+
+            if (isOffScreen) {
+              canMove = true; // Car leaves the map
+            } else {
+              const targetCell = getCell(newGrid, nextR, nextC);
+
+              if (
+                cell.flowDirection &&
+                cell.flowDirection.startsWith("turn_")
+              ) {
+                const parts = cell.flowDirection.split("_");
+                const exit = parts[2];
+                nextDir = exit;
+                nextR = r;
+                nextC = c;
+                if (nextDir === "up") nextR--;
+                if (nextDir === "down") nextR++;
+                if (nextDir === "left") nextC--;
+                if (nextDir === "right") nextC++;
+
+                if (isTargetCompatible(getCell(newGrid, nextR, nextC), nextDir))
+                  canMove = true;
+              } else if (targetCell && targetCell.type.startsWith("road")) {
+                if (isTargetCompatible(targetCell, nextDir)) canMove = true;
+                else tryToTurn = true;
+              } else {
+                tryToTurn = true;
+              }
+            }
+
+            if (!canMove && tryToTurn) {
+              const possibleTurns = [];
+              const currentFlow = cell.flowDirection;
+
+              const checkTurn = (dir) => {
+                if (currentFlow && currentFlow !== dir) return;
+                let dr = 0,
+                  dc = 0;
+                if (dir === "up") dr = -1;
+                if (dir === "down") dr = 1;
+                if (dir === "left") dc = -1;
+                if (dir === "right") dc = 1;
+                const t = getCell(newGrid, r + dr, c + dc);
+                if (isTargetCompatible(t, dir)) possibleTurns.push(dir);
+              };
+
+              if (direction === "up" || direction === "down") {
+                checkTurn("left");
+                checkTurn("right");
+              } else {
+                checkTurn("up");
+                checkTurn("down");
+              }
+
+              if (possibleTurns.length > 0) {
+                const config = cell.carConfig || {};
+                const bias = config.turnBias || "none";
+                let chosenDir = null;
+
+                if (bias !== "none") {
+                  const getRelativeDir = (currentFacing, turnType) => {
+                    const dirs = ["up", "right", "down", "left"];
+                    const idx = dirs.indexOf(currentFacing);
+                    if (idx === -1) return null;
+                    if (turnType === "left") return dirs[(idx + 3) % 4];
+                    if (turnType === "right") return dirs[(idx + 1) % 4];
+                    return null;
+                  };
+                  const preferredDir = getRelativeDir(direction, bias);
+                  if (preferredDir && possibleTurns.includes(preferredDir))
+                    chosenDir = preferredDir;
+                }
+
+                if (!chosenDir)
+                  chosenDir =
+                    possibleTurns[
+                      Math.floor(Math.random() * possibleTurns.length)
+                    ];
+
+                nextDir = chosenDir;
+                nextR = r;
+                nextC = c;
+                if (nextDir === "up") nextR--;
+                if (nextDir === "down") nextR++;
+                if (nextDir === "left") nextC--;
+                if (nextDir === "right") nextC++;
+                canMove = true;
+              }
+            }
+
+            if (canMove) {
+              const movingConfig = cell.carConfig;
+              if (cell.type) {
+                newGrid[r][c] = {
+                  ...cell,
+                  hasCar: false,
+                  carConfig: undefined,
+                  movementProgress: 0,
+                };
+              } else {
+                newGrid[r][c] = null;
+              }
+
+              // Only occupy next cell if it is ON SCREEN
+              if (newGrid[nextR] && newGrid[nextR][nextC] !== undefined) {
+                const target = newGrid[nextR][nextC];
+                const newCellData = target
+                  ? { ...target }
+                  : { type: "road_straight_horizontal" };
+                newCellData.hasCar = nextDir;
+                newCellData.carConfig = movingConfig;
+                newCellData.movementProgress = 0;
+                newGrid[nextR][nextC] = newCellData;
+                movedCars.add(`${nextR},${nextC}`);
+              }
+            } else {
+              newGrid[r][c] = {
+                ...cell,
+                hasCar: nextDir,
+                movementProgress: MOVE_THRESHOLD,
+              };
+            }
+          } else {
+            newGrid[r][c] = { ...cell, movementProgress: MOVE_THRESHOLD };
+          }
+        }
+      }
+
+      // 3. WRITE TO REF (IMMEDIATELY) AND STATE (FOR RENDER)
+      // Limit history size to prevent memory leaks if running for hours
+      let nextHistory = [...curHistory.slice(0, curStep + 1), newGrid];
+      // Optional: Truncate history if > 1000 steps to save memory
+      if (nextHistory.length > 500) {
+        nextHistory = nextHistory.slice(nextHistory.length - 500);
+        simulationState.current = { history: nextHistory, step: 499 };
+
+        // CRITICAL ORDER: Update history FIRST, then step.
+        // This ensures that when React renders, the array is already available.
+        setHistory(nextHistory);
+        setStep(499);
+      } else {
+        simulationState.current = { history: nextHistory, step: curStep + 1 };
+        setHistory(nextHistory);
+        setStep(curStep + 1);
+      }
+    }, SIMULATION_TICK_MS);
+
     return () => clearInterval(interval);
-  }, [isPlaying, step, rows, cols]);
+  }, [isPlaying, rows, cols, autoSpawnEnabled]);
 
   const updateGrid = useCallback(
     (row, col, newItemOrType) => {
@@ -1897,7 +2060,6 @@ export default function App() {
             newGrid[row][col] = null;
           }
         } else if (newItemOrType === "car") {
-          // --- FIX: INHERIT ROAD DIRECTION ON PLACEMENT ---
           let startDir = "right";
           if (
             updatedCell.flowDirection &&
@@ -1908,15 +2070,10 @@ export default function App() {
           updatedCell.hasCar = startDir;
           updatedCell.carConfig = { speed: 1, turnBias: "none" };
           newGrid[row][col] = updatedCell;
-        }
-
-        // --- NEW DIVIDER PLACEMENT LOGIC ---
-        else if (newItemOrType === "road_divider_vertical") {
+        } else if (newItemOrType === "road_divider_vertical") {
           updatedCell.type = newItemOrType;
-          updatedCell.lanePosition = 0; // Left (Primary)
+          updatedCell.lanePosition = 0;
           newGrid[row][col] = updatedCell;
-
-          // Auto-place secondary lane to the right
           if (col + 1 < cols) {
             const rightCell = newGrid[row][col + 1] || {
               type: null,
@@ -1924,16 +2081,14 @@ export default function App() {
             };
             if (!rightCell.type) {
               rightCell.type = "road_divider_vertical";
-              rightCell.lanePosition = 1; // Right (Secondary)
+              rightCell.lanePosition = 1;
               newGrid[row][col + 1] = rightCell;
             }
           }
         } else if (newItemOrType === "road_divider_horizontal") {
           updatedCell.type = newItemOrType;
-          updatedCell.lanePosition = 0; // Top (Primary)
+          updatedCell.lanePosition = 0;
           newGrid[row][col] = updatedCell;
-
-          // Auto-place secondary lane below
           if (row + 1 < rows) {
             const bottomCell = newGrid[row + 1][col] || {
               type: null,
@@ -1941,26 +2096,19 @@ export default function App() {
             };
             if (!bottomCell.type) {
               bottomCell.type = "road_divider_horizontal";
-              bottomCell.lanePosition = 1; // Bottom (Secondary)
+              bottomCell.lanePosition = 1;
               newGrid[row + 1][col] = bottomCell;
             }
           }
-        }
-
-        // --- AUTO-PLACEMENT LOGIC FOR MULTI-LANE ---
-        else if (newItemOrType === "road_multilane_vertical") {
-          const laneCount = toolLaneCount; // Default N from state
-
+        } else if (newItemOrType === "road_multilane_vertical") {
+          const laneCount = toolLaneCount;
           for (let i = 0; i < laneCount; i++) {
             if (col + i < cols) {
               const cell = newGrid[row][col + i] || {
                 type: null,
                 hasCar: false,
               };
-
-              // PROTECT EXISTING DIVIDER: Do not overwrite it
               if (cell.type && cell.type.includes("divider")) continue;
-
               cell.type = newItemOrType;
               cell.laneCount = laneCount;
               cell.lanePosition = i;
@@ -1968,27 +2116,21 @@ export default function App() {
             }
           }
         } else if (newItemOrType === "road_multilane_horizontal") {
-          const laneCount = toolLaneCount; // Default N from state
-
+          const laneCount = toolLaneCount;
           for (let i = 0; i < laneCount; i++) {
             if (row + i < rows) {
               const cell = newGrid[row + i][col] || {
                 type: null,
                 hasCar: false,
               };
-
-              // PROTECT EXISTING DIVIDER
               if (cell.type && cell.type.includes("divider")) continue;
-
               cell.type = newItemOrType;
               cell.laneCount = laneCount;
               cell.lanePosition = i;
               newGrid[row + i][col] = cell;
             }
           }
-        }
-        // --- STANDARD PLACEMENT ---
-        else {
+        } else {
           updatedCell.type = newItemOrType;
           if (newItemOrType === "traffic_light") {
             updatedCell.state = "green";
@@ -1998,7 +2140,10 @@ export default function App() {
           newGrid[row][col] = updatedCell;
         }
 
-        return [...prev.slice(0, step + 1), newGrid];
+        // Sync Ref after manual update
+        const newHist = [...prev.slice(0, step + 1), newGrid];
+        simulationState.current = { history: newHist, step: step + 1 };
+        return newHist;
       });
       setStep((s) => s + 1);
     },
@@ -2073,7 +2218,6 @@ export default function App() {
           const c = isVertical ? baseC + i : baseC;
 
           if (r >= 0 && r < rows && c >= 0 && c < cols) {
-            // PROTECT DIVIDER during expansion
             if (
               newGrid[r][c] &&
               newGrid[r][c].type &&
@@ -2082,18 +2226,14 @@ export default function App() {
               continue;
 
             if (i < newLanes) {
-              // Update/Create Lane
               const cell = newGrid[r][c] || { type: null, hasCar: false };
               cell.type = targetCell.type;
               cell.laneCount = newLanes;
               cell.lanePosition = i;
-              // Preserve config if it existed
               if (!cell.flowDirection && targetCell.flowDirection)
                 cell.flowDirection = targetCell.flowDirection;
               newGrid[r][c] = cell;
             } else {
-              // Delete Lane (Contraction)
-              // Only delete if it's actually part of this road group
               if (
                 newGrid[r][c] &&
                 newGrid[r][c].type === targetCell.type &&
@@ -2156,18 +2296,15 @@ export default function App() {
         if (currentCell && currentCell.type.startsWith("road")) {
           // --- 1. LANE HOPPING (Treat Multi-lane as one entity) ---
           if (currentCell.type.includes("multilane")) {
-            // Iterate through ALL lanes in this group
             const laneCount = currentCell.laneCount || 2;
             const currentPos = currentCell.lanePosition || 0;
             const isVertical = currentCell.type.includes("vertical");
 
-            // Calculate Base (Lane 0)
             const baseR = isVertical ? r : r - currentPos;
             const baseC = isVertical ? c - currentPos : c;
 
-            // Add all siblings to queue
             for (let i = 0; i < laneCount; i++) {
-              if (i === currentPos) continue; // Skip self
+              if (i === currentPos) continue;
 
               const siblingR = isVertical ? baseR : baseR + i;
               const siblingC = isVertical ? baseC + i : baseC;
@@ -2221,7 +2358,7 @@ export default function App() {
             let newFlow = currDir;
 
             if (
-              cellType.includes("horizontal") && // Covers both straight and multilane
+              cellType.includes("horizontal") &&
               (currDir === "up" || currDir === "down")
             ) {
               const leftN = getCell(newGrid, r, c - 1);
@@ -2235,7 +2372,7 @@ export default function App() {
                 newFlow = `turn_${currDir}_right`;
               }
             } else if (
-              cellType.includes("vertical") && // Covers both straight and multilane
+              cellType.includes("vertical") &&
               (currDir === "left" || currDir === "right")
             ) {
               const upN = getCell(newGrid, r - 1, c);
@@ -2328,9 +2465,10 @@ export default function App() {
   if (paletteMode === "road") currentPaletteItems = ROAD_PALETTE_ITEMS;
   if (paletteMode === "decoration")
     currentPaletteItems = DECORATION_PALETTE_ITEMS;
+  if (paletteMode === "random") currentPaletteItems = RANDOM_PALETTE_ITEMS;
 
   const selectedCellData = selectedCell
-    ? grid[selectedCell.row] && grid[selectedCell.row][selectedCell.col]
+    ? grid && grid[selectedCell.row] && grid[selectedCell.row][selectedCell.col]
     : null;
 
   // --- RENDERING AUTH STATES ---
@@ -2909,7 +3047,10 @@ export default function App() {
                   <PaletteItem
                     key={item.type}
                     item={item}
-                    isSelected={selectedTool === item.type}
+                    isSelected={
+                      selectedTool === item.type ||
+                      (item.type === "toggle_autospawn" && autoSpawnEnabled)
+                    }
                     onClick={() => {
                       if (item.type === "road_menu") {
                         setPaletteMode("road");
@@ -2917,12 +3058,24 @@ export default function App() {
                       } else if (item.type === "decoration_menu") {
                         setPaletteMode("decoration");
                         setSelectedTool("select");
-                      }
-                      // Removed old "back" logic here since it's now in footer
-                      else {
+                      } else if (item.type === "random_menu") {
+                        setPaletteMode("random");
+                        setSelectedTool("select");
+                      } else if (item.type === "populate_cars") {
+                        if (confirm("Randomly place cars on empty roads?")) {
+                          handlePopulateCars();
+                        }
+                      } else if (item.type === "toggle_autospawn") {
+                        setAutoSpawnEnabled(!autoSpawnEnabled);
+                      } else {
                         setSelectedTool(item.type);
                       }
-                      if (item.type !== "select") setSelectedCell(null);
+                      if (
+                        item.type !== "select" &&
+                        item.type !== "populate_cars" &&
+                        item.type !== "toggle_autospawn"
+                      )
+                        setSelectedCell(null);
                     }}
                   />
                 ))}
