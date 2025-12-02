@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
-import { db } from "./firebase"; // Import the DB we just initialized
+// --- FIREBASE IMPORTS ---
+import { db, auth } from "./firebase";
 import {
   collection,
   getDocs,
@@ -7,12 +8,24 @@ import {
   updateDoc,
   deleteDoc,
   doc,
+  query,
+  where,
 } from "firebase/firestore";
+import {
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  signOut,
+  onAuthStateChanged,
+  updateEmail,
+  verifyBeforeUpdateEmail,
+  sendPasswordResetEmail,
+  reauthenticateWithCredential,
+  EmailAuthProvider,
+} from "firebase/auth";
 
 // --- Constants ---
 const TOTAL_GRID_WIDTH_PX = 19 * 64;
 const TOTAL_GRID_HEIGHT_PX = 12 * 64;
-const API_BASE_URL = "http://localhost:8000/api";
 
 // --- Icons ---
 const MenuIcon = () => (
@@ -32,7 +45,6 @@ const MenuIcon = () => (
     <line x1="3" y1="18" x2="21" y2="18"></line>
   </svg>
 );
-// X Icon
 const XIcon = () => (
   <svg
     xmlns="http://www.w3.org/2000/svg"
@@ -143,6 +155,22 @@ const BackArrowIcon = () => (
   >
     <line x1="19" y1="12" x2="5" y2="12"></line>
     <polyline points="12 19 5 12 12 5"></polyline>
+  </svg>
+);
+const UserIcon = () => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    width="20"
+    height="20"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+    <circle cx="12" cy="7" r="4"></circle>
   </svg>
 );
 
@@ -959,7 +987,361 @@ const PaletteItem = ({ item, isSelected, onClick }) => {
   );
 };
 
-// --- Save/Load Modal ---
+// --- Login Component (Email/Password Version) ---
+const LoginScreen = () => {
+  const [isRegistering, setIsRegistering] = useState(false);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState(null);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError(null);
+    try {
+      if (isRegistering) {
+        await createUserWithEmailAndPassword(auth, email, password);
+      } else {
+        await signInWithEmailAndPassword(auth, email, password);
+      }
+      // Auth listener in App() handles the rest
+    } catch (err) {
+      console.error(err);
+      if (err.code === "auth/invalid-credential") {
+        setError("Invalid email or password.");
+      } else if (err.code === "auth/email-already-in-use") {
+        setError("Email already in use.");
+      } else if (err.code === "auth/weak-password") {
+        setError("Password should be at least 6 characters.");
+      } else {
+        setError("Authentication failed. Try again.");
+      }
+    }
+  };
+
+  return (
+    <div className="flex h-screen w-screen bg-slate-950 items-center justify-center font-sans">
+      <div className="bg-slate-900 border border-slate-800 p-8 rounded-2xl shadow-2xl max-w-md w-full text-center">
+        <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-cyan-400 rounded-xl mx-auto flex items-center justify-center text-4xl shadow-lg shadow-blue-500/20 mb-6">
+          🏗️
+        </div>
+        <h1 className="text-3xl font-bold text-white mb-2">
+          CityBuilder<span className="text-blue-400 font-light">Pro</span>
+        </h1>
+        <p className="text-slate-400 mb-8">
+          {isRegistering
+            ? "Create an account to save cities."
+            : "Sign in to load your layouts."}
+        </p>
+
+        {error && (
+          <div className="bg-red-500/10 border border-red-500/20 text-red-400 text-sm p-3 rounded-lg mb-4">
+            {error}
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit} className="space-y-4 text-left">
+          <div>
+            <label className="text-xs font-bold text-slate-500 uppercase ml-1">
+              Email
+            </label>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="name@example.com"
+              className="w-full mt-1 bg-slate-800 border border-slate-700 rounded-lg p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+              required
+            />
+          </div>
+          <div>
+            <label className="text-xs font-bold text-slate-500 uppercase ml-1">
+              Password
+            </label>
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="••••••••"
+              className="w-full mt-1 bg-slate-800 border border-slate-700 rounded-lg p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+              required
+            />
+          </div>
+
+          <button
+            type="submit"
+            className="w-full py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-bold transition-all shadow-lg shadow-blue-900/20 mt-2"
+          >
+            {isRegistering ? "Sign Up" : "Sign In"}
+          </button>
+        </form>
+
+        <div className="mt-6 pt-6 border-t border-slate-800">
+          <p className="text-slate-400 text-sm">
+            {isRegistering
+              ? "Already have an account?"
+              : "Don't have an account?"}
+            <button
+              onClick={() => {
+                setIsRegistering(!isRegistering);
+                setError(null);
+              }}
+              className="ml-2 text-blue-400 hover:text-blue-300 font-medium transition-colors"
+            >
+              {isRegistering ? "Log In" : "Register"}
+            </button>
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// --- User Profile Modal (With Logout) ---
+const UserProfileModal = ({ user, onClose }) => {
+  const [activeTab, setActiveTab] = useState("profile");
+  const [newEmail, setNewEmail] = useState("");
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const [status, setStatus] = useState({ type: null, message: null });
+
+  useEffect(() => {
+    setStatus({ type: null, message: null });
+    setNewEmail("");
+    setCurrentPassword("");
+  }, [activeTab]);
+
+  const handleUpdateEmail = async (e) => {
+    e.preventDefault();
+    setStatus({ type: null, message: null });
+    setIsLoading(true);
+
+    if (!newEmail || !currentPassword) {
+      setStatus({ type: "error", message: "Email and password required." });
+      setIsLoading(false);
+      return;
+    }
+
+    try {
+      const cred = EmailAuthProvider.credential(user.email, currentPassword);
+      await reauthenticateWithCredential(user, cred);
+      await verifyBeforeUpdateEmail(user, newEmail);
+
+      setStatus({
+        type: "success",
+        message: `Verification sent to ${newEmail}. Check your inbox!`,
+      });
+      setNewEmail("");
+      setCurrentPassword("");
+    } catch (err) {
+      console.error(err);
+      setStatus({
+        type: "error",
+        message: "Failed to update. Check password.",
+      });
+    }
+    setIsLoading(false);
+  };
+
+  const handlePasswordReset = async () => {
+    setStatus({ type: null, message: null });
+    setIsLoading(true);
+    try {
+      await sendPasswordResetEmail(auth, user.email);
+      setStatus({
+        type: "success",
+        message: `Reset link sent to ${user.email}`,
+      });
+    } catch (err) {
+      console.error(err);
+      setStatus({ type: "error", message: "Failed to send email." });
+    }
+    setIsLoading(false);
+  };
+
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+      onClose();
+    } catch (error) {
+      console.error("Error signing out:", error);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fadeIn">
+      <div className="bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col max-h-[90vh]">
+        {/* Header */}
+        <div className="p-4 border-b border-slate-800 flex justify-between items-center bg-slate-800/50">
+          <h2 className="text-lg font-bold text-white flex items-center gap-2">
+            <div className="p-1.5 bg-blue-500/20 rounded-lg text-blue-400">
+              <UserIcon />
+            </div>
+            Account Settings
+          </h2>
+          <button
+            onClick={onClose}
+            className="p-1 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-white transition-colors"
+          >
+            <XIcon />
+          </button>
+        </div>
+
+        {/* Tabs */}
+        <div className="flex border-b border-slate-800">
+          <button
+            onClick={() => setActiveTab("profile")}
+            className={`flex-1 py-3 text-sm font-medium transition-colors relative ${
+              activeTab === "profile"
+                ? "text-blue-400 bg-slate-800/30"
+                : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/50"
+            }`}
+          >
+            Profile
+            {activeTab === "profile" && (
+              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-500"></div>
+            )}
+          </button>
+          <button
+            onClick={() => setActiveTab("security")}
+            className={`flex-1 py-3 text-sm font-medium transition-colors relative ${
+              activeTab === "security"
+                ? "text-blue-400 bg-slate-800/30"
+                : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/50"
+            }`}
+          >
+            Security
+            {activeTab === "security" && (
+              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-500"></div>
+            )}
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="p-6 overflow-y-auto custom-scrollbar min-h-[300px]">
+          {status.message && (
+            <div
+              className={`mb-6 p-3 rounded-lg border text-xs font-medium flex items-center gap-2 ${
+                status.type === "success"
+                  ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
+                  : "bg-red-500/10 border-red-500/20 text-red-400"
+              }`}
+            >
+              <span>{status.type === "success" ? "✅" : "⚠️"}</span>
+              {status.message}
+            </div>
+          )}
+
+          {activeTab === "profile" && (
+            <div className="space-y-6 animate-fadeIn">
+              <div className="flex items-center gap-4 p-4 bg-slate-800 rounded-xl border border-slate-700">
+                <div className="w-14 h-14 rounded-full bg-gradient-to-br from-blue-600 to-cyan-500 flex items-center justify-center text-xl font-bold text-white shadow-lg">
+                  {user.email ? user.email[0].toUpperCase() : "U"}
+                </div>
+                <div className="min-w-0">
+                  <div className="text-white font-bold truncate text-sm">
+                    {user.email}
+                  </div>
+                  <div className="text-[10px] text-slate-500 font-mono truncate max-w-[200px] mt-0.5">
+                    ID: {user.uid}
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-5 bg-slate-800 rounded-xl border border-slate-700">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="p-2 bg-slate-950 rounded text-lg">📧</div>
+                  <div>
+                    <h3 className="text-white font-bold text-sm">
+                      Update Email
+                    </h3>
+                    <p className="text-[10px] text-slate-400">
+                      Confirmation sent to new address.
+                    </p>
+                  </div>
+                </div>
+                <form onSubmit={handleUpdateEmail} className="space-y-3">
+                  <input
+                    type="email"
+                    value={newEmail}
+                    onChange={(e) => setNewEmail(e.target.value)}
+                    placeholder="New Email Address"
+                    className="w-full bg-slate-950 border border-slate-600 rounded-lg p-2.5 text-sm text-white placeholder-slate-500 focus:ring-1 focus:ring-blue-500 outline-none"
+                  />
+                  <input
+                    type="password"
+                    value={currentPassword}
+                    onChange={(e) => setCurrentPassword(e.target.value)}
+                    placeholder="Verify Current Password"
+                    className="w-full bg-slate-950 border border-slate-600 rounded-lg p-2.5 text-sm text-white placeholder-slate-500 focus:ring-1 focus:ring-blue-500 outline-none"
+                  />
+                  <button
+                    type="submit"
+                    disabled={isLoading}
+                    className="w-full py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white rounded-lg font-bold text-xs shadow-lg shadow-blue-900/20"
+                  >
+                    {isLoading ? "Sending..." : "Send Verification Link"}
+                  </button>
+                </form>
+              </div>
+
+              {/* LOGOUT BUTTON ADDED HERE */}
+              <div className="pt-2 border-t border-slate-800">
+                <button
+                  onClick={handleLogout}
+                  className="w-full py-3 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 rounded-lg font-bold text-sm transition-all flex items-center justify-center gap-2"
+                >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                    <polyline points="16 17 21 12 16 7"></polyline>
+                    <line x1="21" y1="12" x2="9" y2="12"></line>
+                  </svg>
+                  Sign Out
+                </button>
+              </div>
+            </div>
+          )}
+
+          {activeTab === "security" && (
+            <div className="space-y-6 animate-fadeIn">
+              <div className="p-5 bg-slate-800 rounded-xl border border-slate-700">
+                <div className="flex items-start gap-4">
+                  <div className="p-2 bg-slate-950 rounded text-lg">🔒</div>
+                  <div>
+                    <h3 className="text-white font-bold text-sm">
+                      Reset Password
+                    </h3>
+                    <p className="text-[10px] text-slate-400 mt-1">
+                      Link sent to {user.email}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={handlePasswordReset}
+                  disabled={isLoading}
+                  className="mt-4 w-full py-2 bg-slate-700 hover:bg-slate-600 text-white border border-slate-600 rounded-lg font-medium text-xs transition-all"
+                >
+                  {isLoading ? "Sending..." : "Send Password Reset Email"}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// --- Save/Load Modal (Nested Subcollection Version) ---
 const SaveLoadModal = ({
   mode,
   onClose,
@@ -969,6 +1351,7 @@ const SaveLoadModal = ({
   onLoadLayout,
   currentLayoutId,
   setCurrentLayoutId,
+  user,
 }) => {
   const [saveName, setSaveName] = useState("");
   const [layouts, setLayouts] = useState([]);
@@ -979,95 +1362,89 @@ const SaveLoadModal = ({
     if (mode === "load") fetchLayouts();
   }, [mode]);
 
+  // FETCH (GET) - From User Subcollection
   const fetchLayouts = async () => {
     setLoading(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/layouts/`);
-      if (response.ok) {
-        const data = await response.json();
-        const results = Array.isArray(data) ? data : data.results || [];
-        setLayouts(results);
-      } else {
-        setMessage("Failed to fetch layouts. Is backend running?");
-      }
+      // NEW PATH: users -> UID -> layouts
+      const userLayoutsRef = collection(db, "users", user.uid, "layouts");
+      const querySnapshot = await getDocs(userLayoutsRef);
+
+      const loadedLayouts = querySnapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
+      setLayouts(loadedLayouts);
     } catch (e) {
       console.error(e);
-      setMessage("Error connecting to server.");
+      setMessage("Error connecting to Firebase.");
     }
     setLoading(false);
   };
 
+  // SAVE AS NEW (POST) - To User Subcollection
   const handleSaveNew = async () => {
     if (!saveName.trim()) return;
+
+    const serializedGrid = JSON.stringify(grid);
+
     try {
-      const response = await fetch(`${API_BASE_URL}/layouts/`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: saveName,
-          description: "",
-          rows,
-          cols,
-          grid_data: grid,
-        }),
+      // NEW PATH: users -> UID -> layouts
+      const userLayoutsRef = collection(db, "users", user.uid, "layouts");
+
+      const docRef = await addDoc(userLayoutsRef, {
+        name: saveName,
+        description: "",
+        rows,
+        cols,
+        grid_data: serializedGrid,
+        created_at: new Date().toISOString(),
       });
-      if (response.ok) {
-        const data = await response.json();
-        setCurrentLayoutId(data.id);
-        onClose();
-        alert("Saved as new layout!");
-      } else setMessage("Save failed.");
+
+      setCurrentLayoutId(docRef.id);
+      onClose();
+      alert("Saved as new layout!");
     } catch (e) {
-      setMessage("Error saving.");
+      console.error("Firebase Error Details:", e);
+      setMessage("Error saving to Firebase.");
     }
   };
 
+  // OVERWRITE (PUT) - Specific Doc in User Subcollection
   const handleOverwrite = async () => {
     if (!currentLayoutId) return;
+
+    const serializedGrid = JSON.stringify(grid);
+
     try {
-      const getResponse = await fetch(
-        `${API_BASE_URL}/layouts/${currentLayoutId}/`
-      );
-      if (!getResponse.ok) {
-        setMessage("Could not verify original layout.");
-        return;
-      }
-      const originalLayout = await getResponse.json();
+      // NEW PATH: users -> UID -> layouts -> LayoutID
+      const layoutRef = doc(db, "users", user.uid, "layouts", currentLayoutId);
 
-      const response = await fetch(
-        `${API_BASE_URL}/layouts/${currentLayoutId}/`,
-        {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            name: originalLayout.name,
-            description: originalLayout.description || "",
-            rows,
-            cols,
-            grid_data: grid,
-          }),
-        }
-      );
+      await updateDoc(layoutRef, {
+        rows,
+        cols,
+        grid_data: serializedGrid,
+        updated_at: new Date().toISOString(),
+      });
 
-      if (response.ok) {
-        onClose();
-        alert("Layout overwritten successfully!");
-      } else {
-        setMessage("Overwrite failed.");
-      }
+      onClose();
+      alert("Layout overwritten successfully!");
     } catch (e) {
       console.error(e);
-      setMessage("Error overwriting.");
+      setMessage("Overwrite failed.");
     }
   };
 
+  // DELETE (DELETE) - Specific Doc in User Subcollection
   const handleDelete = async (id) => {
     if (!confirm("Delete this layout?")) return;
     try {
-      await fetch(`${API_BASE_URL}/layouts/${id}/`, { method: "DELETE" });
+      // NEW PATH: users -> UID -> layouts -> LayoutID
+      await deleteDoc(doc(db, "users", user.uid, "layouts", id));
       setLayouts((prev) => prev.filter((l) => l.id !== id));
       if (id === currentLayoutId) setCurrentLayoutId(null);
     } catch (e) {
+      console.error(e);
       setMessage("Delete failed.");
     }
   };
@@ -1075,6 +1452,7 @@ const SaveLoadModal = ({
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fadeIn">
       <div className="bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col max-h-[80vh]">
+        {/* Header */}
         <div className="p-4 border-b border-slate-800 flex justify-between items-center bg-slate-800/50">
           <h2 className="text-lg font-bold text-white flex items-center gap-2">
             {mode === "save" ? (
@@ -1095,6 +1473,7 @@ const SaveLoadModal = ({
           </button>
         </div>
 
+        {/* Body */}
         <div className="p-6 overflow-y-auto custom-scrollbar">
           {message && (
             <div className="mb-4 p-2 bg-red-900/30 border border-red-500/30 text-red-300 rounded text-sm text-center">
@@ -1104,6 +1483,7 @@ const SaveLoadModal = ({
 
           {mode === "save" ? (
             <div className="space-y-6">
+              {/* Option 1: Overwrite */}
               {currentLayoutId && (
                 <div className="p-4 bg-emerald-900/20 border border-emerald-500/30 rounded-lg">
                   <div className="text-xs font-bold text-emerald-400 uppercase mb-2">
@@ -1126,6 +1506,7 @@ const SaveLoadModal = ({
                 </div>
               )}
 
+              {/* Option 2: Save As New */}
               <div>
                 <label className="block text-xs font-bold text-slate-500 uppercase mb-1">
                   {currentLayoutId ? "Save as New Layout" : "Layout Name"}
@@ -1147,6 +1528,7 @@ const SaveLoadModal = ({
               </div>
             </div>
           ) : (
+            // LOAD MODE
             <div className="space-y-3">
               {loading ? (
                 <div className="text-center text-slate-500 py-4">
@@ -1176,8 +1558,11 @@ const SaveLoadModal = ({
                         )}
                       </div>
                       <div className="text-[10px] text-slate-500">
-                        {new Date(layout.created_at).toLocaleDateString()} •{" "}
-                        {layout.rows}x{layout.cols}
+                        {/* Display Date safely */}
+                        {layout.created_at
+                          ? new Date(layout.created_at).toLocaleDateString()
+                          : "Unknown Date"}{" "}
+                        • {layout.rows}x{layout.cols}
                       </div>
                     </div>
                     <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -1217,6 +1602,9 @@ const SaveLoadModal = ({
 
 // --- Main App ---
 export default function App() {
+  const [user, setUser] = useState(null);
+  const [authLoading, setAuthLoading] = useState(true);
+
   const [rows, setRows] = useState(16);
   const [cols, setCols] = useState(25);
   const [history, setHistory] = useState([createEmptyGrid(16, 25)]);
@@ -1234,6 +1622,15 @@ export default function App() {
   const [toolLaneCount, setToolLaneCount] = useState(2); // State for "Tool Config"
 
   const [activeModal, setActiveModal] = useState(null);
+
+  // AUTH STATE LISTENER
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      setUser(currentUser);
+      setAuthLoading(false);
+    });
+    return () => unsubscribe();
+  }, []);
 
   const getCell = (g, r, c) => {
     if (r < 0 || r >= g.length || c < 0 || c >= g[0].length) return null;
@@ -1914,9 +2311,13 @@ export default function App() {
   };
 
   const handleLoadLayout = (loadedGrid, loadedRows, loadedCols, id) => {
+    // FIX: Parse the grid if it's a JSON string
+    const parsedGrid =
+      typeof loadedGrid === "string" ? JSON.parse(loadedGrid) : loadedGrid;
+
     setRows(loadedRows);
     setCols(loadedCols);
-    setHistory([loadedGrid]);
+    setHistory([parsedGrid]);
     setStep(0);
     setIsPlaying(false);
     setPrePlayStep(null);
@@ -1932,12 +2333,25 @@ export default function App() {
     ? grid[selectedCell.row] && grid[selectedCell.row][selectedCell.col]
     : null;
 
+  // --- RENDERING AUTH STATES ---
+  if (authLoading) {
+    return (
+      <div className="flex h-screen w-screen bg-slate-950 items-center justify-center font-sans text-slate-400 animate-pulse">
+        Loading Authentication...
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <LoginScreen />;
+  }
+
   return (
     <div className="flex h-screen w-screen bg-slate-950 font-sans text-slate-200 overflow-hidden">
-      {/* --- Modal Overlay --- */}
-      {activeModal && (
+      {/* --- Modal Overlays --- */}
+      {activeModal === "save" && (
         <SaveLoadModal
-          mode={activeModal}
+          mode="save"
           onClose={() => setActiveModal(null)}
           grid={grid}
           rows={rows}
@@ -1945,7 +2359,24 @@ export default function App() {
           onLoadLayout={handleLoadLayout}
           currentLayoutId={currentLayoutId}
           setCurrentLayoutId={setCurrentLayoutId}
+          user={user}
         />
+      )}
+      {activeModal === "load" && (
+        <SaveLoadModal
+          mode="load"
+          onClose={() => setActiveModal(null)}
+          grid={grid}
+          rows={rows}
+          cols={cols}
+          onLoadLayout={handleLoadLayout}
+          currentLayoutId={currentLayoutId}
+          setCurrentLayoutId={setCurrentLayoutId}
+          user={user}
+        />
+      )}
+      {activeModal === "profile" && (
+        <UserProfileModal user={user} onClose={() => setActiveModal(null)} />
       )}
 
       {/* Sidebar Toggle */}
@@ -1980,15 +2411,38 @@ export default function App() {
                 🏗️
               </div>
               <h1 className="text-xl font-bold text-white tracking-tight">
-                CityBuilder<span className="text-blue-400 font-light">Pro</span>
+                City<span className="text-blue-400 font-light">Pro</span>
               </h1>
             </div>
-            <button
-              onClick={() => setIsSidebarOpen(false)}
-              className="w-8 h-8 p-0 flex items-center justify-center bg-slate-700 hover:bg-slate-600 border border-slate-500 text-white rounded-full transition-all shadow-md ml-2 -mr-2 z-50"
-            >
-              <XIcon />
-            </button>
+            {/* NEW: USER & CLOSE BUTTONS */}
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setActiveModal("profile")}
+                className="w-8 h-8 rounded-full bg-slate-700 border border-slate-600 flex items-center justify-center text-xs font-bold text-slate-300 overflow-hidden hover:ring-2 hover:ring-blue-500 transition-all"
+                title="User Settings"
+              >
+                {user.photoURL ? (
+                  <img
+                    src={user.photoURL}
+                    alt="User"
+                    className="w-full h-full object-cover"
+                  />
+                ) : user.email ? (
+                  user.email[0].toUpperCase()
+                ) : (
+                  "U"
+                )}
+              </button>
+
+              {/* REPLACED EXIT BUTTON WITH CLOSE SIDEBAR BUTTON */}
+              <button
+                onClick={() => setIsSidebarOpen(false)}
+                className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-700 rounded-lg transition-colors border border-transparent hover:border-slate-600"
+                title="Close Menu"
+              >
+                <XIcon />
+              </button>
+            </div>
           </div>
 
           <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
