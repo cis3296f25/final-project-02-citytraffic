@@ -7,7 +7,7 @@
  * - Runs the Simulation Loop (Traffic logic, Car movement).
  * - Handles User Interactions (Clicking, Dragging, Key presses).
  * - Orchestrates the layout of the Sidebar and Main Stage.
- * - Manages Themes (Light/Dark) and View Scale.
+ * - Manages Themes (Light/Dark) and Grid Resizing.
  *
  * DEPENDENCIES:
  * - ./components/* (UI Building Blocks)
@@ -42,7 +42,7 @@ import {
   ROAD_PALETTE_ITEMS,
   DECORATION_PALETTE_ITEMS,
   RANDOM_PALETTE_ITEMS,
-  THEMES, // Ensure this is exported in constants.js
+  THEMES,
 } from "./constants";
 
 // --- Helper Functions ---
@@ -57,6 +57,8 @@ export default function App() {
   // --- STATE: Grid & History ---
   const [rows, setRows] = useState(16);
   const [cols, setCols] = useState(25);
+  // Stores the resolution multiplier (e.g., 0.5x, 1x, 2x)
+  const [gridMultiplier, setGridMultiplier] = useState(1.0);
   const [history, setHistory] = useState([createEmptyGrid(16, 25)]);
   const [step, setStep] = useState(0);
 
@@ -76,7 +78,6 @@ export default function App() {
   const [autoSpawnEnabled, setAutoSpawnEnabled] = useState(false); // Default: OFF
   const [spawnRate, setSpawnRate] = useState(5); // 1-10
   const [theme, setTheme] = useState("dark"); // 'dark' | 'light'
-  const [gridScale, setGridScale] = useState(1.0); // 0.5 - 2.0
 
   // --- REFS (Simulation Performance) ---
   const globalTickRef = useRef(0);
@@ -86,7 +87,6 @@ export default function App() {
   });
 
   // Determine current Theme Colors
-  // Fallback objects provided in case constants.js isn't updated yet
   const T = THEMES?.[theme] || {
     bgApp: "bg-slate-950",
     textMain: "text-slate-200",
@@ -120,6 +120,42 @@ export default function App() {
   const getCell = (g, r, c) => {
     if (r < 0 || r >= g.length || c < 0 || c >= g[0].length) return null;
     return g[r][c];
+  };
+
+  // --- NEW: Handle Grid Resizing (Resolution Change) ---
+  const handleGridResize = (multiplier) => {
+    // 1. Calculate new dimensions based on base ratio (16:25)
+    const BASE_ROWS = 16;
+    const BASE_COLS = 25;
+    const newRows = Math.round(BASE_ROWS * multiplier);
+    const newCols = Math.round(BASE_COLS * multiplier);
+
+    if (newRows === rows && newCols === cols) return;
+
+    // 2. Stop playback if active
+    if (isPlaying) setIsPlaying(false);
+
+    // 3. Migrate Data: Copy current grid to new grid (anchored top-left)
+    const currentGrid = grid; // Get current state
+    const newGrid = createEmptyGrid(newRows, newCols);
+
+    for (let r = 0; r < Math.min(rows, newRows); r++) {
+      for (let c = 0; c < Math.min(cols, newCols); c++) {
+        // Deep copy the cell if it exists
+        if (currentGrid[r][c]) {
+          newGrid[r][c] = { ...currentGrid[r][c] };
+        }
+      }
+    }
+
+    // 4. Update State
+    // We reset history to avoid "undoing" into a grid of different size
+    setRows(newRows);
+    setCols(newCols);
+    setGridMultiplier(multiplier);
+    setHistory([newGrid]);
+    setStep(0);
+    setPrePlayStep(null);
   };
 
   // --- 4. LOGIC: Populate Cars ---
@@ -862,6 +898,7 @@ export default function App() {
       typeof loadedGrid === "string" ? JSON.parse(loadedGrid) : loadedGrid;
     setRows(loadedRows);
     setCols(loadedCols);
+    setGridMultiplier(loadedRows / 16); // Approximate multiplier from loaded rows
     setHistory([parsedGrid]);
     setStep(0);
     setIsPlaying(false);
@@ -932,8 +969,8 @@ export default function App() {
           onClose={() => setActiveModal(null)}
           theme={theme}
           setTheme={setTheme}
-          gridScale={gridScale}
-          setGridScale={setGridScale}
+          gridMultiplier={gridMultiplier}
+          onResizeGrid={handleGridResize}
         />
       )}
 
@@ -1003,9 +1040,14 @@ export default function App() {
                   "U"
                 )}
               </button>
+              {/* SIDEBAR CLOSE BUTTON - FIXED */}
               <button
                 onClick={() => setIsSidebarOpen(false)}
-                className={`p-1.5 rounded-lg transition-colors border border-transparent ${T.textDim} hover:${T.textMain} hover:${T.panelBg}`}
+                className={`p-1.5 rounded-lg transition-colors border border-transparent ${
+                  theme === "light"
+                    ? "bg-slate-100 text-slate-700 hover:text-slate-900 hover:bg-slate-200"
+                    : "text-slate-400 hover:text-white hover:bg-slate-800"
+                }`}
                 title="Close Menu"
               >
                 <XIcon />
@@ -1014,7 +1056,7 @@ export default function App() {
           </div>
 
           <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
-            {/* --- PROPERTIES PANEL: Multi-Lane Tool --- */}
+            {/* ... (Keep Tool Settings / Auto Spawn / Properties Panels) ... */}
             {!selectedCell &&
               selectedTool &&
               selectedTool.includes("multilane") && (
@@ -1062,46 +1104,6 @@ export default function App() {
                   </div>
                 </div>
               )}
-
-            {/* --- NEW: Auto-Spawn Intensity Slider (Responsive) --- */}
-            {!selectedCell && autoSpawnEnabled && (
-              <div
-                className={`mb-6 p-4 rounded-xl border-l-4 border-fuchsia-500 shadow-md animate-fadeIn ${T.panelBg} ${T.panelBorder} border`}
-              >
-                <div className="flex justify-between items-center mb-3">
-                  <h2
-                    className={`text-sm font-bold uppercase tracking-wider ${T.textMain}`}
-                  >
-                    🔄 Auto-Spawn Intensity
-                  </h2>
-                </div>
-                <div className="flex flex-col gap-2">
-                  <div className="flex items-center justify-between w-full gap-2">
-                    <span className={`text-xs min-w-[30px] ${T.textDim}`}>
-                      Slow
-                    </span>
-                    <input
-                      type="range"
-                      min="1"
-                      max="10"
-                      value={spawnRate}
-                      onChange={(e) => setSpawnRate(parseInt(e.target.value))}
-                      className={`w-full flex-1 accent-fuchsia-500 h-1 rounded-lg appearance-none cursor-pointer ${
-                        theme === "light" ? "bg-slate-300" : "bg-slate-700"
-                      }`}
-                    />
-                    <span
-                      className={`text-xs min-w-[30px] text-right ${T.textDim}`}
-                    >
-                      Fast
-                    </span>
-                  </div>
-                  <div className="text-center mt-1 text-[10px] text-fuchsia-500 font-mono font-bold">
-                    Intensity: {spawnRate}
-                  </div>
-                </div>
-              </div>
-            )}
 
             {/* --- PROPERTIES PANEL: Selected Multi-Lane Road --- */}
             {selectedCell &&
@@ -1163,7 +1165,47 @@ export default function App() {
                 </div>
               )}
 
-            {/* --- PROPERTIES PANEL: Traffic Light --- */}
+            {/* ... (Keep Traffic Light / Car Config / Flow Config / Auto Spawn) ... */}
+            {!selectedCell && autoSpawnEnabled && (
+              <div
+                className={`mb-6 p-4 rounded-xl border-l-4 border-fuchsia-500 shadow-md animate-fadeIn ${T.panelBg} ${T.panelBorder} border`}
+              >
+                <div className="flex justify-between items-center mb-3">
+                  <h2
+                    className={`text-sm font-bold uppercase tracking-wider ${T.textMain}`}
+                  >
+                    🔄 Auto-Spawn Intensity
+                  </h2>
+                </div>
+                <div className="flex flex-col gap-2">
+                  <div className="flex items-center justify-between w-full gap-2">
+                    <span className={`text-xs min-w-[30px] ${T.textDim}`}>
+                      Slow
+                    </span>
+                    <input
+                      type="range"
+                      min="1"
+                      max="10"
+                      value={spawnRate}
+                      onChange={(e) => setSpawnRate(parseInt(e.target.value))}
+                      className={`w-full flex-1 accent-fuchsia-500 h-1 rounded-lg appearance-none cursor-pointer ${
+                        theme === "light" ? "bg-slate-300" : "bg-slate-700"
+                      }`}
+                    />
+                    <span
+                      className={`text-xs min-w-[30px] text-right ${T.textDim}`}
+                    >
+                      Fast
+                    </span>
+                  </div>
+                  <div className="text-center mt-1 text-[10px] text-fuchsia-500 font-mono font-bold">
+                    Intensity: {spawnRate}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ... (Traffic light panel) ... */}
             {selectedCell &&
               selectedCellData &&
               selectedCellData.type === "traffic_light" && (
@@ -1213,30 +1255,11 @@ export default function App() {
                         </div>
                       ))}
                     </div>
-                    <div
-                      className={`p-2 rounded flex justify-between items-center ${
-                        theme === "light" ? "bg-slate-100" : "bg-slate-900"
-                      }`}
-                    >
-                      <span className={`text-xs ${T.textDim}`}>State:</span>
-                      <span
-                        className={`text-xs font-bold px-2 py-0.5 rounded ${
-                          selectedCellData.state === "green"
-                            ? "bg-green-100 text-green-600 border border-green-200"
-                            : selectedCellData.state === "yellow"
-                            ? "bg-yellow-100 text-yellow-600 border border-yellow-200"
-                            : "bg-red-100 text-red-600 border border-red-200"
-                        }`}
-                      >
-                        {(selectedCellData.state || "GREEN").toUpperCase()} (
-                        {selectedCellData.timer || 0})
-                      </span>
-                    </div>
                   </div>
                 </div>
               )}
 
-            {/* --- PROPERTIES PANEL: Car Settings --- */}
+            {/* ... (Car Settings Panel) ... */}
             {selectedCell && selectedCellData && selectedCellData.hasCar && (
               <div
                 className={`mb-6 p-4 rounded-xl border-l-4 border-orange-500 shadow-md animate-fadeIn ${T.panelBg} ${T.panelBorder} border`}
@@ -1319,7 +1342,7 @@ export default function App() {
               </div>
             )}
 
-            {/* --- PROPERTIES PANEL: Traffic Flow --- */}
+            {/* ... (Flow Settings Panel) ... */}
             {selectedCell &&
               selectedCellData &&
               selectedCellData.type &&
@@ -1430,7 +1453,7 @@ export default function App() {
               </div>
             )}
 
-            {/* --- Tools Palette --- */}
+            {/* --- Tools Palette (Updated to pass theme) --- */}
             <div className="mb-8">
               <h2
                 className={`text-xs font-bold uppercase tracking-wider mb-3 ml-1 ${T.textDim}`}
@@ -1442,6 +1465,8 @@ export default function App() {
                   <PaletteItem
                     key={item.type}
                     item={item}
+                    // ADDED: theme prop passed down
+                    theme={theme}
                     isSelected={
                       selectedTool === item.type ||
                       (item.type === "toggle_autospawn" && autoSpawnEnabled)
@@ -1511,7 +1536,7 @@ export default function App() {
       <div
         className={`flex-1 relative overflow-hidden flex flex-col min-w-0 ${T.bgApp}`}
       >
-        {/* Floating Controls: Bottom Right */}
+        {/* Floating Controls: Bottom Right (Updated colors for visibility) */}
         <div
           className={`absolute bottom-8 right-8 z-50 flex items-center gap-2 p-2 backdrop-blur-md border rounded-2xl shadow-2xl ${
             theme === "light"
@@ -1550,14 +1575,22 @@ export default function App() {
           ></div>
           <button
             onClick={() => setActiveModal("save")}
-            className="p-3 text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/20 rounded-xl transition-colors"
+            className={`p-3 rounded-xl transition-colors ${
+              theme === "light"
+                ? "bg-emerald-50 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-100"
+                : "text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/20"
+            }`}
             title="Save Layout"
           >
             <SaveIcon />
           </button>
           <button
             onClick={() => setActiveModal("load")}
-            className="p-3 text-blue-400 hover:text-blue-300 hover:bg-blue-500/20 rounded-xl transition-colors"
+            className={`p-3 rounded-xl transition-colors ${
+              theme === "light"
+                ? "bg-blue-50 text-blue-600 hover:text-blue-700 hover:bg-blue-100"
+                : "text-blue-400 hover:text-blue-300 hover:bg-blue-500/20"
+            }`}
             title="Load Layout"
           >
             <LoadIcon />
@@ -1578,7 +1611,11 @@ export default function App() {
                 setStep((s) => s + 1);
               }
             }}
-            className="p-3 text-red-400 hover:text-red-300 hover:bg-red-500/20 rounded-xl transition-colors"
+            className={`p-3 rounded-xl transition-colors ${
+              theme === "light"
+                ? "bg-red-50 text-red-600 hover:text-red-700 hover:bg-red-100"
+                : "text-red-400 hover:text-red-300 hover:bg-red-500/20"
+            }`}
             title="Clear Grid"
           >
             <TrashIcon />
@@ -1635,13 +1672,8 @@ export default function App() {
 
         {/* Grid Canvas Container with Scaling */}
         <div className="flex-1 flex items-center justify-center p-8 overflow-auto">
-          <div
-            style={{
-              transform: `scale(${gridScale})`,
-              transformOrigin: "center center",
-              transition: "transform 0.2s ease-out",
-            }}
-          >
+          {/* CHANGED: Removed scale transform, wrapper now just holds the Grid */}
+          <div className="relative">
             <Grid
               grid={grid}
               rows={rows}
@@ -1651,6 +1683,7 @@ export default function App() {
               setIsMouseDown={setIsMouseDown}
               onRightClick={(r, c) => updateGrid(r, c, "eraser")}
               selectedCell={selectedCell}
+              theme={theme}
             />
           </div>
         </div>
