@@ -1,14 +1,6 @@
 /**
  * FILE PURPOSE:
  * Helper functions to render complex SVG graphics for the grid cells.
- *
- * CONTENTS:
- * - renderCar: Draws the car and rotates it based on direction.
- * - renderTrafficLight: Draws the signal box and active lights.
- * - renderTree: Draws a standalone SVG tree.
- * - renderBuilding: Draws a standalone SVG building.
- * - renderDirectionArrow: Draws straight and curved (turn) arrows for traffic flow.
- * - renderCellContent: The main orchestrator that determines what SVG to draw based on cell type.
  */
 
 import React from "react";
@@ -27,14 +19,11 @@ export const renderCar = (direction) => {
 
   return (
     <g transform={`translate(50,50) rotate(${rotation}) translate(-25,-30)`}>
-      {/* Shadow */}
       <rect x="2" y="4" width="50" height="60" rx="8" fill="rgba(0,0,0,0.2)" />
-      {/* Wheels */}
       <rect x="-4" y="8" width="8" height="12" rx="2" fill="#333" />
       <rect x="46" y="8" width="8" height="12" rx="2" fill="#333" />
       <rect x="-4" y="40" width="8" height="12" rx="2" fill="#333" />
       <rect x="46" y="40" width="8" height="12" rx="2" fill="#333" />
-      {/* Body */}
       <rect
         x="0"
         y="0"
@@ -45,10 +34,8 @@ export const renderCar = (direction) => {
         stroke="#991B1B"
         strokeWidth="2"
       />
-      {/* Windshields */}
       <rect x="5" y="8" width="40" height="10" rx="2" fill="#93C5FD" />
       <rect x="5" y="42" width="40" height="8" rx="2" fill="#93C5FD" />
-      {/* Roof Highlight */}
       <rect
         x="6"
         y="20"
@@ -62,7 +49,7 @@ export const renderCar = (direction) => {
   );
 };
 
-// --- 2. Traffic Light Renderer ---
+// --- 2. Traffic Light Renderer (UPDATED: Strictly on Road & No Cutoff) ---
 export const renderTrafficLight = (lightState) => {
   const colors = {
     green: "#22c55e",
@@ -72,34 +59,43 @@ export const renderTrafficLight = (lightState) => {
   };
   const currentState = lightState || "green";
 
+  // Positioned at (55, 20) with scale(0.35)
+  // This keeps the box and the pole strictly within the 0-100 cell bounds.
+  // y=20 ensures it sits visually "on" the road (which starts at y=10).
   return (
-    <g transform="translate(25, 10)">
+    <g transform="translate(55, 20) scale(0.35)">
+      {/* Short Pole connecting to top */}
+      <line x1="25" y1="0" x2="25" y2="-15" stroke="#374151" strokeWidth="6" />
+
+      {/* The Box */}
       <rect
         x="0"
         y="0"
         width="50"
-        height="80"
+        height="130"
         rx="10"
         fill="#1f2937"
         stroke="#4b5563"
-        strokeWidth="2"
+        strokeWidth="4"
+        className="shadow-sm"
       />
+      {/* Lights */}
       <circle
         cx="25"
-        cy="20"
-        r="8"
+        cy="25"
+        r="15"
         fill={currentState === "red" ? colors.red : colors.off}
       />
       <circle
         cx="25"
-        cy="40"
-        r="8"
+        cy="65"
+        r="15"
         fill={currentState === "yellow" ? colors.yellow : colors.off}
       />
       <circle
         cx="25"
-        cy="60"
-        r="8"
+        cy="105"
+        r="15"
         fill={currentState === "green" ? colors.green : colors.off}
       />
     </g>
@@ -110,18 +106,13 @@ export const renderTrafficLight = (lightState) => {
 const renderTree = () => {
   return (
     <g transform="translate(50, 85)">
-      {/* Shadow */}
       <ellipse cx="0" cy="0" rx="25" ry="10" fill="rgba(0,0,0,0.2)" />
-
-      {/* Trunk */}
       <rect x="-6" y="-30" width="12" height="30" fill="#78350f" />
-
-      {/* Leaves (Layered) */}
       <g transform="translate(0, -35)">
-        <circle cx="0" cy="0" r="25" fill="#15803d" /> {/* Dark Green Base */}
-        <circle cx="-12" cy="-10" r="20" fill="#16a34a" /> {/* Mid Green */}
+        <circle cx="0" cy="0" r="25" fill="#15803d" />
+        <circle cx="-12" cy="-10" r="20" fill="#16a34a" />
         <circle cx="12" cy="-10" r="20" fill="#16a34a" />
-        <circle cx="0" cy="-25" r="18" fill="#22c55e" /> {/* Light Top */}
+        <circle cx="0" cy="-25" r="18" fill="#22c55e" />
       </g>
     </g>
   );
@@ -131,7 +122,6 @@ const renderTree = () => {
 const renderBuilding = () => {
   return (
     <g>
-      {/* Shadow */}
       <rect
         x="10"
         y="10"
@@ -140,21 +130,17 @@ const renderBuilding = () => {
         rx="4"
         fill="rgba(0,0,0,0.2)"
       />
-      {/* Base */}
       <rect
         x="10"
         y="5"
         width="80"
         height="85"
         rx="4"
-        fill="#64748b" // slate-500
+        fill="#64748b"
         stroke="#334155"
         strokeWidth="3"
       />
-      {/* Roof */}
       <rect x="15" y="10" width="70" height="70" fill="#f1f5f9" />
-
-      {/* AC Units / Detail */}
       <rect x="20" y="15" width="25" height="25" fill="#93c5fd" />
       <rect x="55" y="15" width="25" height="25" fill="#93c5fd" />
       <rect x="20" y="50" width="25" height="25" fill="#93c5fd" />
@@ -168,7 +154,6 @@ export const renderDirectionArrow = (direction) => {
   let content = null;
   let rot = 0;
 
-  // Straight Arrows
   if (
     direction === "up" ||
     direction === "down" ||
@@ -184,17 +169,14 @@ export const renderDirectionArrow = (direction) => {
         <rect x="-4" y="5" width="8" height="15" fill="white" />
       </>
     );
-  }
-  // Curved Arrows (L-Shapes for Turns)
-  else if (direction && direction.startsWith("turn_")) {
-    const parts = direction.split("_"); // [turn, entry, exit]
+  } else if (direction && direction.startsWith("turn_")) {
+    const parts = direction.split("_");
     const entry = parts[1];
     const exit = parts[2];
 
     let pathD = "";
     let headD = "";
 
-    // Drawing paths relative to center (0,0) with translate(50,50) applied later
     if (entry === "up" && exit === "right") {
       pathD = "M 0 35 Q 0 0 35 0";
       headD = "M 35 0 L 25 -5 L 25 5 Z";
@@ -262,33 +244,19 @@ export const renderCellContent = (cellData, neighborInfo) => {
   const content = [];
 
   if (cellType) {
-    // 6a. Traffic Light
-    if (cellType === "traffic_light") {
-      content.push(
-        <React.Fragment key="light">
-          {renderTrafficLight(cellData.state)}
-        </React.Fragment>
-      );
-    }
-    // 6b. NEW: Standalone SVG Tree
-    else if (cellType === "tree") {
+    if (cellType === "tree") {
       content.push(<React.Fragment key="tree">{renderTree()}</React.Fragment>);
-    }
-    // 6c. NEW: Standalone SVG Building
-    else if (cellType === "building") {
+    } else if (cellType === "building") {
       content.push(
         <React.Fragment key="building">{renderBuilding()}</React.Fragment>
       );
-    }
-    // 6d. Simple Emoji Items (Fallback)
-    else if (!cellType.startsWith("road_")) {
+    } else if (!cellType.startsWith("road_") && cellType !== "traffic_light") {
       const item =
         MAIN_PALETTE_ITEMS.find((p) => p.type === cellType) ||
         ROAD_PALETTE_ITEMS.find((p) => p.type === cellType) ||
         DECORATION_PALETTE_ITEMS.find((p) => p.type === cellType);
 
-      // Ensure we don't double render if 'tree' or 'building' slip through here
-      if (item && cellType !== "tree" && cellType !== "building") {
+      if (item) {
         content.push(
           <foreignObject key="base" x="0" y="0" width="100" height="100">
             <div className="w-full h-full flex items-center justify-center text-4xl drop-shadow-md">
@@ -298,17 +266,17 @@ export const renderCellContent = (cellData, neighborInfo) => {
         );
       }
     }
-    // 6e. Complex Roads (Dividers, Multi-lanes, Intersections)
-    else {
+    // Roads & Traffic Lights (Base Layer)
+    else if (cellType.startsWith("road_") || cellType === "traffic_light") {
       const strokeColor = "#334155";
       const strokeWidth = 80;
       const center = 50;
 
-      // --- DIVIDER ROADS ---
-      if (cellType === "road_divider_vertical") {
-        const pos = cellData.lanePosition || 0; // 0=Left, 1=Right
+      const effectiveType =
+        cellType === "traffic_light" ? "road_intersection" : cellType;
 
-        // Background Road
+      if (effectiveType === "road_divider_vertical") {
+        const pos = cellData.lanePosition || 0;
         content.push(
           <line
             key="bg-road"
@@ -320,8 +288,6 @@ export const renderCellContent = (cellData, neighborInfo) => {
             strokeWidth={strokeWidth}
           />
         );
-
-        // Solid Yellow Line Logic
         const lineX = pos === 0 ? 100 : 0;
         content.push(
           <line
@@ -330,14 +296,12 @@ export const renderCellContent = (cellData, neighborInfo) => {
             y1={0}
             x2={lineX}
             y2={100}
-            stroke="#FACC15" // Yellow-400
+            stroke="#FACC15"
             strokeWidth="6"
           />
         );
-      } else if (cellType === "road_divider_horizontal") {
-        const pos = cellData.lanePosition || 0; // 0=Top, 1=Bottom
-
-        // Background Road
+      } else if (effectiveType === "road_divider_horizontal") {
+        const pos = cellData.lanePosition || 0;
         content.push(
           <line
             key="bg-road"
@@ -349,8 +313,6 @@ export const renderCellContent = (cellData, neighborInfo) => {
             strokeWidth={strokeWidth}
           />
         );
-
-        // Solid Yellow Line Logic
         const lineY = pos === 0 ? 100 : 0;
         content.push(
           <line
@@ -359,18 +321,13 @@ export const renderCellContent = (cellData, neighborInfo) => {
             y1={lineY}
             x2={100}
             y2={lineY}
-            stroke="#FACC15" // Yellow-400
+            stroke="#FACC15"
             strokeWidth="6"
           />
         );
-      }
-
-      // --- MULTI-LANE ROADS (N-Lanes) ---
-      else if (cellType === "road_multilane_vertical") {
+      } else if (effectiveType === "road_multilane_vertical") {
         const pos = cellData.lanePosition || 0;
         const count = cellData.laneCount || 2;
-
-        // Background
         content.push(
           <line
             key="bg-road"
@@ -382,12 +339,10 @@ export const renderCellContent = (cellData, neighborInfo) => {
             strokeWidth={strokeWidth}
           />
         );
-
-        // Left Dotted Line
-        if (pos > 0) {
+        if (pos > 0)
           content.push(
             <line
-              key="dashed-line-left"
+              key="dl1"
               x1={0}
               y1={0}
               x2={0}
@@ -397,13 +352,10 @@ export const renderCellContent = (cellData, neighborInfo) => {
               strokeDasharray="12,12"
             />
           );
-        }
-
-        // Right Dotted Line
-        if (pos < count - 1) {
+        if (pos < count - 1)
           content.push(
             <line
-              key="dashed-line-right"
+              key="dl2"
               x1={100}
               y1={0}
               x2={100}
@@ -413,12 +365,9 @@ export const renderCellContent = (cellData, neighborInfo) => {
               strokeDasharray="12,12"
             />
           );
-        }
-      } else if (cellType === "road_multilane_horizontal") {
+      } else if (effectiveType === "road_multilane_horizontal") {
         const pos = cellData.lanePosition || 0;
         const count = cellData.laneCount || 2;
-
-        // Background
         content.push(
           <line
             key="bg-road"
@@ -430,12 +379,10 @@ export const renderCellContent = (cellData, neighborInfo) => {
             strokeWidth={strokeWidth}
           />
         );
-
-        // Top Dotted Line
-        if (pos > 0) {
+        if (pos > 0)
           content.push(
             <line
-              key="dashed-line-top"
+              key="dt1"
               x1={0}
               y1={0}
               x2={100}
@@ -445,13 +392,10 @@ export const renderCellContent = (cellData, neighborInfo) => {
               strokeDasharray="12,12"
             />
           );
-        }
-
-        // Bottom Dotted Line
-        if (pos < count - 1) {
+        if (pos < count - 1)
           content.push(
             <line
-              key="dashed-line-bottom"
+              key="dt2"
               x1={0}
               y1={100}
               x2={100}
@@ -461,11 +405,12 @@ export const renderCellContent = (cellData, neighborInfo) => {
               strokeDasharray="12,12"
             />
           );
-        }
       }
-      // --- INTERSECTIONS ---
-      else if (cellType === "road_intersection") {
+      // --- INTERSECTION (Modified for Corner Filling) ---
+      else if (effectiveType === "road_intersection") {
         const { up, down, left, right } = neighborInfo;
+
+        // Draw the Arms (standard lines)
         if (up)
           content.push(
             <line
@@ -514,6 +459,56 @@ export const renderCellContent = (cellData, neighborInfo) => {
               strokeWidth={strokeWidth}
             />
           );
+
+        // --- PLAZA CORNER FILLING ---
+        // If two adjacent sides are connected, fill the corner between them to make a solid square.
+        // This closes the "gaps" in 2x2 or 3x3 arrangements.
+        if (up && right)
+          content.push(
+            <rect
+              key="corn-tr"
+              x={50}
+              y={0}
+              width={50}
+              height={50}
+              fill={strokeColor}
+            />
+          );
+        if (right && down)
+          content.push(
+            <rect
+              key="corn-br"
+              x={50}
+              y={50}
+              width={50}
+              height={50}
+              fill={strokeColor}
+            />
+          );
+        if (down && left)
+          content.push(
+            <rect
+              key="corn-bl"
+              x={0}
+              y={50}
+              width={50}
+              height={50}
+              fill={strokeColor}
+            />
+          );
+        if (left && up)
+          content.push(
+            <rect
+              key="corn-tl"
+              x={0}
+              y={0}
+              width={50}
+              height={50}
+              fill={strokeColor}
+            />
+          );
+
+        // Center Cap (Standard intersection logic)
         if (!(up || down || left || right))
           content.push(
             <circle
@@ -535,9 +530,7 @@ export const renderCellContent = (cellData, neighborInfo) => {
               fill={strokeColor}
             />
           );
-      }
-      // --- STRAIGHT ROADS ---
-      else if (cellType === "road_straight_vertical") {
+      } else if (effectiveType === "road_straight_vertical") {
         content.push(
           <line
             key="vertical"
@@ -549,7 +542,7 @@ export const renderCellContent = (cellData, neighborInfo) => {
             strokeWidth={strokeWidth}
           />
         );
-      } else if (cellType === "road_straight_horizontal") {
+      } else if (effectiveType === "road_straight_horizontal") {
         content.push(
           <line
             key="horizontal"
@@ -563,7 +556,6 @@ export const renderCellContent = (cellData, neighborInfo) => {
         );
       }
 
-      // Draw Flow Arrow if present
       if (flowDirection) {
         content.push(
           <React.Fragment key="flow">
@@ -574,7 +566,16 @@ export const renderCellContent = (cellData, neighborInfo) => {
     }
   }
 
-  // 7. Draw Car on top if present
+  // 7. Render TRAFFIC LIGHT OVERLAY
+  if (cellData?.hasTrafficLight || cellData?.type === "traffic_light") {
+    content.push(
+      <React.Fragment key="traffic_light_overlay">
+        {renderTrafficLight(cellData.lightState || cellData.state)}
+      </React.Fragment>
+    );
+  }
+
+  // 8. Draw Car
   if (carDirection) {
     content.push(
       <React.Fragment key="car">{renderCar(carDirection)}</React.Fragment>

@@ -232,23 +232,17 @@ export default function App() {
         for (let c = 0; c < cols; c++) {
           const cell = newGrid[r][c];
           if (cell && cell.isSpawner && !cell.hasCar) {
-            // Default interval is 20 ticks (2 seconds) if not set
             const interval = cell.spawnInterval || 20;
             const lastTick = cell.lastSpawnTick || 0;
 
             if (globalTickRef.current - lastTick >= interval) {
-              // Time to spawn!
-              let spawnDir = "right"; // Default fallback
-
-              // 1. Prioritize Flow Direction
+              let spawnDir = "right";
               if (
                 cell.flowDirection &&
                 !cell.flowDirection.startsWith("turn")
               ) {
                 spawnDir = cell.flowDirection;
-              }
-              // 2. Infer from road type
-              else if (cell.type.includes("vertical")) {
+              } else if (cell.type.includes("vertical")) {
                 spawnDir = "down";
               } else if (cell.type.includes("horizontal")) {
                 spawnDir = "right";
@@ -256,7 +250,7 @@ export default function App() {
 
               cell.hasCar = spawnDir;
               cell.carConfig = { speed: 1, turnBias: "none" };
-              cell.movementProgress = Math.random() * 200; // Small randomness
+              cell.movementProgress = Math.random() * 200;
               cell.lastSpawnTick = globalTickRef.current;
             }
           }
@@ -290,25 +284,44 @@ export default function App() {
         }
       }
 
-      // [Traffic Lights]
+      // [Traffic Lights] (Updated to handle 'hasTrafficLight' property)
       if (globalTickRef.current % 5 === 0) {
         for (let r = 0; r < rows; r++) {
           for (let c = 0; c < cols; c++) {
             let cell = newGrid[r][c];
-            if (cell && cell.type === "traffic_light") {
-              if (!cell.config) cell.config = { green: 10, yellow: 4, red: 10 };
-              if (!cell.state) cell.state = "green";
-              if (cell.timer === undefined) cell.timer = 0;
+            if (
+              cell &&
+              (cell.type === "traffic_light" || cell.hasTrafficLight)
+            ) {
+              // Ensure config exists
+              const config = cell.lightConfig ||
+                cell.config || { green: 10, yellow: 4, red: 10 };
+              if (!cell.lightConfig && !cell.config) cell.lightConfig = config;
 
-              cell.timer += 1;
-              const limit = cell.config[cell.state];
+              const state = cell.lightState || cell.state || "green";
+              if (!cell.lightState && !cell.state) cell.lightState = state;
 
-              if (cell.timer >= limit) {
-                cell.timer = 0;
-                if (cell.state === "green") cell.state = "yellow";
-                else if (cell.state === "yellow") cell.state = "red";
-                else if (cell.state === "red") cell.state = "green";
+              let timer =
+                cell.lightTimer !== undefined
+                  ? cell.lightTimer
+                  : cell.timer || 0;
+
+              timer += 1;
+              const limit = config[state];
+
+              if (timer >= limit) {
+                timer = 0;
+                let nextState = state;
+                if (state === "green") nextState = "yellow";
+                else if (state === "yellow") nextState = "red";
+                else if (state === "red") nextState = "green";
+
+                // Update universal props
+                cell.lightState = nextState;
+                cell.state = nextState;
               }
+              cell.lightTimer = timer;
+              cell.timer = timer;
             }
           }
         }
@@ -341,9 +354,7 @@ export default function App() {
               direction = "up";
             else if (currentFlow === "down" && direction === "up")
               direction = "down";
-          }
-          // Priority Flow
-          else if (currentPriority) {
+          } else if (currentPriority) {
             let pr = r,
               pc = c;
             if (currentPriority === "up") pr--;
@@ -375,8 +386,11 @@ export default function App() {
           ];
           for (const offset of adjOffsets) {
             const neighbor = getCell(newGrid, r + offset.dr, c + offset.dc);
-            if (neighbor && neighbor.type === "traffic_light") {
-              const state = neighbor.state || "green";
+            if (
+              neighbor &&
+              (neighbor.type === "traffic_light" || neighbor.hasTrafficLight)
+            ) {
+              const state = neighbor.lightState || neighbor.state || "green";
               if (state === "yellow" || state === "red")
                 isBlockedByLight = true;
             }
@@ -548,10 +562,13 @@ export default function App() {
         if (selectedTool === "select") return prev;
 
         if (newItemOrType === "eraser") {
+          // If we have a traffic light, remove it first, but keep the road?
+          // User request implied they want to place lights on roads.
+          // Standard erasing usually kills the whole cell.
           if (updatedCell.hasCar) {
             updatedCell.hasCar = false;
             updatedCell.carConfig = undefined;
-            if (newGrid[row][col]) newGrid[row][col] = updatedCell;
+            newGrid[row][col] = updatedCell;
           } else {
             updatedCell = null;
             newGrid[row][col] = null;
@@ -567,7 +584,26 @@ export default function App() {
           updatedCell.hasCar = startDir;
           updatedCell.carConfig = { speed: 1, turnBias: "none" };
           newGrid[row][col] = updatedCell;
-        } else if (newItemOrType === "road_divider_vertical") {
+        }
+        // --- TRAFFIC LIGHT (Overlay Logic) ---
+        else if (newItemOrType === "traffic_light") {
+          if (updatedCell.type && updatedCell.type.startsWith("road")) {
+            updatedCell.hasTrafficLight = true;
+            updatedCell.lightState = "green";
+            updatedCell.lightTimer = 0;
+            updatedCell.lightConfig = { green: 10, yellow: 4, red: 10 };
+          } else {
+            // Fallback: Create intersection with light
+            updatedCell.type = "road_intersection";
+            updatedCell.hasTrafficLight = true;
+            updatedCell.lightState = "green";
+            updatedCell.lightTimer = 0;
+            updatedCell.lightConfig = { green: 10, yellow: 4, red: 10 };
+          }
+          newGrid[row][col] = updatedCell;
+        }
+        // ... (Rest of road types)
+        else if (newItemOrType === "road_divider_vertical") {
           updatedCell.type = newItemOrType;
           updatedCell.lanePosition = 0;
           newGrid[row][col] = updatedCell;
@@ -629,11 +665,6 @@ export default function App() {
           }
         } else {
           updatedCell.type = newItemOrType;
-          if (newItemOrType === "traffic_light") {
-            updatedCell.state = "green";
-            updatedCell.timer = 0;
-            updatedCell.config = { green: 10, yellow: 4, red: 10 };
-          }
           newGrid[row][col] = updatedCell;
         }
 
@@ -655,7 +686,6 @@ export default function App() {
       );
       if (newGrid[row][col]) {
         newGrid[row][col][key] = value;
-        // If enabling, set an initial timestamp to prevent instant flood
         if (key === "isSpawner" && value === true) {
           newGrid[row][col].lastSpawnTick = globalTickRef.current;
           if (!newGrid[row][col].spawnInterval)
@@ -673,18 +703,19 @@ export default function App() {
       const newGrid = current.map((r) =>
         r.map((cell) => (cell ? { ...cell } : null))
       );
-      if (newGrid[row][col] && newGrid[row][col].type === "traffic_light") {
-        newGrid[row][col].config = {
-          ...newGrid[row][col].config,
+      if (
+        newGrid[row][col] &&
+        (newGrid[row][col].type === "traffic_light" ||
+          newGrid[row][col].hasTrafficLight)
+      ) {
+        const config = newGrid[row][col].lightConfig ||
+          newGrid[row][col].config || { green: 10, yellow: 4, red: 10 };
+        newGrid[row][col].lightConfig = {
+          ...config,
           [key]: parseInt(value),
         };
-        if (!newGrid[row][col].config)
-          newGrid[row][col].config = {
-            green: 10,
-            yellow: 4,
-            red: 10,
-            [key]: parseInt(value),
-          };
+        // Sync legacy prop just in case
+        newGrid[row][col].config = newGrid[row][col].lightConfig;
       }
       return [...prev.slice(0, step + 1), newGrid];
     });
@@ -1253,7 +1284,8 @@ export default function App() {
             {/* ... (Traffic light panel) ... */}
             {selectedCell &&
               selectedCellData &&
-              selectedCellData.type === "traffic_light" && (
+              (selectedCellData.type === "traffic_light" ||
+                selectedCellData.hasTrafficLight) && (
                 <div
                   className={`mb-6 p-4 rounded-xl border-l-4 border-blue-500 shadow-md animate-fadeIn ${T.panelBg} ${T.panelBorder} border`}
                 >
@@ -1282,7 +1314,11 @@ export default function App() {
                           <input
                             type="number"
                             min="1"
-                            value={selectedCellData.config?.[color] || 10}
+                            value={
+                              selectedCellData.lightConfig?.[color] ||
+                              selectedCellData.config?.[color] ||
+                              10
+                            }
                             onChange={(e) =>
                               updateTrafficLightConfig(
                                 selectedCell.row,
