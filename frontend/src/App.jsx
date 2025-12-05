@@ -57,7 +57,6 @@ export default function App() {
   // --- STATE: Grid & History ---
   const [rows, setRows] = useState(16);
   const [cols, setCols] = useState(25);
-  // Stores the resolution multiplier (e.g., 0.5x, 1x, 2x)
   const [gridMultiplier, setGridMultiplier] = useState(1.0);
   const [history, setHistory] = useState([createEmptyGrid(16, 25)]);
   const [step, setStep] = useState(0);
@@ -72,12 +71,12 @@ export default function App() {
   const [selectedCell, setSelectedCell] = useState(null);
   const [currentLayoutId, setCurrentLayoutId] = useState(null);
   const [toolLaneCount, setToolLaneCount] = useState(2);
-  const [activeModal, setActiveModal] = useState(null); // 'save', 'load', 'profile'
+  const [activeModal, setActiveModal] = useState(null);
 
   // --- STATE: Settings & Config ---
-  const [autoSpawnEnabled, setAutoSpawnEnabled] = useState(false); // Default: OFF
-  const [spawnRate, setSpawnRate] = useState(5); // 1-10
-  const [theme, setTheme] = useState("dark"); // 'dark' | 'light'
+  const [autoSpawnEnabled, setAutoSpawnEnabled] = useState(false);
+  const [spawnRate, setSpawnRate] = useState(5);
+  const [theme, setTheme] = useState("dark");
 
   // --- REFS (Simulation Performance) ---
   const globalTickRef = useRef(0);
@@ -96,7 +95,6 @@ export default function App() {
     sidebarBg: "bg-slate-900/95",
   };
 
-  // Safety: Ensure grid is valid
   const grid =
     history && history[step] ? history[step] : createEmptyGrid(rows, cols);
 
@@ -124,7 +122,6 @@ export default function App() {
 
   // --- NEW: Handle Grid Resizing (Resolution Change) ---
   const handleGridResize = (multiplier) => {
-    // 1. Calculate new dimensions based on base ratio (16:25)
     const BASE_ROWS = 16;
     const BASE_COLS = 25;
     const newRows = Math.round(BASE_ROWS * multiplier);
@@ -132,24 +129,19 @@ export default function App() {
 
     if (newRows === rows && newCols === cols) return;
 
-    // 2. Stop playback if active
     if (isPlaying) setIsPlaying(false);
 
-    // 3. Migrate Data: Copy current grid to new grid (anchored top-left)
-    const currentGrid = grid; // Get current state
+    const currentGrid = grid;
     const newGrid = createEmptyGrid(newRows, newCols);
 
     for (let r = 0; r < Math.min(rows, newRows); r++) {
       for (let c = 0; c < Math.min(cols, newCols); c++) {
-        // Deep copy the cell if it exists
         if (currentGrid[r][c]) {
           newGrid[r][c] = { ...currentGrid[r][c] };
         }
       }
     }
 
-    // 4. Update State
-    // We reset history to avoid "undoing" into a grid of different size
     setRows(newRows);
     setCols(newCols);
     setGridMultiplier(multiplier);
@@ -205,7 +197,6 @@ export default function App() {
     const interval = setInterval(() => {
       globalTickRef.current += 1;
 
-      // Read from REF for speed
       const { history: curHistory, step: curStep } = simulationState.current;
       const currentGrid = curHistory[curStep];
 
@@ -219,7 +210,6 @@ export default function App() {
       );
       const movedCars = new Set();
 
-      // Helper: Check if target accepts entry from direction
       const isTargetCompatible = (tCell, entryDir) => {
         if (!tCell) return false;
         if (tCell.hasCar) return false;
@@ -237,13 +227,47 @@ export default function App() {
         return true;
       };
 
-      // [Auto-Spawn Logic]
-      const spawnInterval = Math.max(3, 33 - spawnRate * 3);
+      // --- NEW: Individual Spawner Logic ---
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          const cell = newGrid[r][c];
+          if (cell && cell.isSpawner && !cell.hasCar) {
+            // Default interval is 20 ticks (2 seconds) if not set
+            const interval = cell.spawnInterval || 20;
+            const lastTick = cell.lastSpawnTick || 0;
 
+            if (globalTickRef.current - lastTick >= interval) {
+              // Time to spawn!
+              let spawnDir = "right"; // Default fallback
+
+              // 1. Prioritize Flow Direction
+              if (
+                cell.flowDirection &&
+                !cell.flowDirection.startsWith("turn")
+              ) {
+                spawnDir = cell.flowDirection;
+              }
+              // 2. Infer from road type
+              else if (cell.type.includes("vertical")) {
+                spawnDir = "down";
+              } else if (cell.type.includes("horizontal")) {
+                spawnDir = "right";
+              }
+
+              cell.hasCar = spawnDir;
+              cell.carConfig = { speed: 1, turnBias: "none" };
+              cell.movementProgress = Math.random() * 200; // Small randomness
+              cell.lastSpawnTick = globalTickRef.current;
+            }
+          }
+        }
+      }
+
+      // [Auto-Spawn Logic (Global)]
+      const spawnInterval = Math.max(3, 33 - spawnRate * 3);
       if (autoSpawnEnabled && globalTickRef.current % spawnInterval === 0) {
         let attempts = 0;
         const maxAttempts = Math.max(3, Math.floor(spawnRate / 2) + 3);
-
         while (attempts < maxAttempts) {
           const r = Math.floor(Math.random() * rows);
           const c = Math.floor(Math.random() * cols);
@@ -303,12 +327,11 @@ export default function App() {
 
           if (cell.movementProgress < MOVE_THRESHOLD) continue;
 
-          // 1. Determine base direction
           let direction = cell.hasCar;
           const currentFlow = cell.flowDirection;
           const currentPriority = cell.flowPriority;
 
-          // 2. Strict Flow Override
+          // Flow Override
           if (currentFlow) {
             if (currentFlow === "left" && direction === "right")
               direction = "left";
@@ -319,7 +342,7 @@ export default function App() {
             else if (currentFlow === "down" && direction === "up")
               direction = "down";
           }
-          // 3. Priority Flow Check
+          // Priority Flow
           else if (currentPriority) {
             let pr = r,
               pc = c;
@@ -327,7 +350,6 @@ export default function App() {
             if (currentPriority === "down") pr++;
             if (currentPriority === "left") pc--;
             if (currentPriority === "right") pc++;
-
             if (
               pr < 0 ||
               pr >= rows ||
@@ -361,11 +383,7 @@ export default function App() {
           }
 
           if (!isBlockedByLight) {
-            // MOVEMENT LOGIC REFACTOR:
-            // Instead of checking Straight then Turning, we gather ALL valid moves first.
             const possibleMoves = [];
-
-            // Helper to get coordinates
             const getCoords = (d) => {
               let nr = r,
                 nc = c;
@@ -376,29 +394,20 @@ export default function App() {
               return { nr, nc };
             };
 
-            // Helper to validate a move (Connectivity + Geometry)
             const isValidMove = (dir) => {
-              // 1. Flow Override Check: If I'm forced, I must obey.
               if (
                 cell.flowDirection &&
                 cell.flowDirection !== dir &&
                 !cell.flowDirection.startsWith("turn_")
               )
                 return false;
-
               const { nr, nc } = getCoords(dir);
               const isOffScreen = nr < 0 || nr >= rows || nc < 0 || nc >= cols;
-
-              if (isOffScreen) return true; // Edge exit is valid
-
+              if (isOffScreen) return true;
               const target = getCell(newGrid, nr, nc);
               if (!target) return false;
-
-              // 2. Connectivity Check
               if (!isTargetCompatible(target, dir)) return false;
 
-              // 3. GEOMETRY CHECK (Prevent Parallel Hopping)
-              // If moving "Left/Right", target must NOT be purely Vertical (unless Intersection)
               const tType = target.type || "";
               const isTargetVertical = tType.includes("vertical");
               const isTargetHorizontal = tType.includes("horizontal");
@@ -416,16 +425,10 @@ export default function App() {
                 !isTargetIntersection
               )
                 return false;
-
               return true;
             };
 
-            // A. Check Straight (Current Direction)
-            if (isValidMove(direction)) {
-              possibleMoves.push(direction);
-            }
-
-            // B. Check Turns (Perpendicular)
+            if (isValidMove(direction)) possibleMoves.push(direction);
             if (direction === "up" || direction === "down") {
               if (isValidMove("left")) possibleMoves.push("left");
               if (isValidMove("right")) possibleMoves.push("right");
@@ -434,21 +437,16 @@ export default function App() {
               if (isValidMove("down")) possibleMoves.push("down");
             }
 
-            // C. Forced Turn Logic (Visual Curves)
             if (cell.flowDirection && cell.flowDirection.startsWith("turn_")) {
               const exit = cell.flowDirection.split("_")[2];
-              // Overwrite logic: You MUST take this turn if valid
               if (isValidMove(exit)) {
-                possibleMoves.length = 0; // Clear choices
+                possibleMoves.length = 0;
                 possibleMoves.push(exit);
               }
             }
 
-            // D. DECISION TIME
             if (possibleMoves.length > 0) {
               let chosen = null;
-
-              // 1. Apply Bias (Left/Right Priority)
               const config = cell.carConfig || {};
               const bias = config.turnBias || "none";
 
@@ -467,32 +465,24 @@ export default function App() {
                 }
               }
 
-              // 2. Fallback to Straight if bias didn't trigger
-              if (!chosen && possibleMoves.includes(direction)) {
+              if (!chosen && possibleMoves.includes(direction))
                 chosen = direction;
-              }
-
-              // 3. Fallback to Random if straight is blocked
-              if (!chosen) {
+              if (!chosen)
                 chosen =
                   possibleMoves[
                     Math.floor(Math.random() * possibleMoves.length)
                   ];
-              }
 
-              // E. EXECUTE
               nextDir = chosen;
               const { nr, nc } = getCoords(nextDir);
               nextR = nr;
               nextC = nc;
               canMove = true;
             } else {
-              // No valid moves (Stuck or blocked)
               canMove = false;
-              // But preserve "trying to move" state visually if desired
               newGrid[r][c] = {
                 ...cell,
-                hasCar: direction, // Keep facing same way
+                hasCar: direction,
                 movementProgress: MOVE_THRESHOLD,
               };
             }
@@ -509,8 +499,6 @@ export default function App() {
               } else {
                 newGrid[r][c] = null;
               }
-
-              // Only spawn in new cell if on grid
               if (newGrid[nextR] && newGrid[nextR][nextC] !== undefined) {
                 const target = newGrid[nextR][nextC];
                 const newCellData = target
@@ -529,7 +517,6 @@ export default function App() {
         }
       }
 
-      // Memory Management
       let nextHistory = [...curHistory.slice(0, curStep + 1), newGrid];
       if (nextHistory.length > 500) {
         nextHistory = nextHistory.slice(nextHistory.length - 500);
@@ -660,6 +647,26 @@ export default function App() {
   );
 
   // --- 7. LOGIC: Update Configs ---
+  const updateSpawnerConfig = (row, col, key, value) => {
+    setHistory((prev) => {
+      const current = prev[step];
+      const newGrid = current.map((r) =>
+        r.map((cell) => (cell ? { ...cell } : null))
+      );
+      if (newGrid[row][col]) {
+        newGrid[row][col][key] = value;
+        // If enabling, set an initial timestamp to prevent instant flood
+        if (key === "isSpawner" && value === true) {
+          newGrid[row][col].lastSpawnTick = globalTickRef.current;
+          if (!newGrid[row][col].spawnInterval)
+            newGrid[row][col].spawnInterval = 20;
+        }
+      }
+      return [...prev.slice(0, step + 1), newGrid];
+    });
+    setStep((s) => s + 1);
+  };
+
   const updateTrafficLightConfig = (row, col, key, value) => {
     setHistory((prev) => {
       const current = prev[step];
@@ -1449,6 +1456,91 @@ export default function App() {
                         </button>
                       ))}
                     </div>
+
+                    {/* --- NEW: SPAWNER CONFIG SECTION --- */}
+                    <div
+                      className={`pt-3 border-t mt-1 ${
+                        theme === "light"
+                          ? "border-slate-200"
+                          : "border-slate-700"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <h3
+                          className={`text-xs font-bold uppercase tracking-wider ${T.textMain}`}
+                        >
+                          🚙 Car Generator
+                        </h3>
+                        <button
+                          onClick={() =>
+                            updateSpawnerConfig(
+                              selectedCell.row,
+                              selectedCell.col,
+                              "isSpawner",
+                              !selectedCellData.isSpawner
+                            )
+                          }
+                          // 1. "w-9" gives a bit more breathing room (36px).
+                          // 2. "flex items-center" ensures perfect vertical centering (fixes Y-axis).
+                          // 3. "p-1" adds consistent padding around the ball.
+                          className={`w-9 h-5 rounded-full transition-colors flex items-center p-1 ${
+                            selectedCellData.isSpawner
+                              ? "bg-emerald-500"
+                              : "bg-slate-600"
+                          }`}
+                        >
+                          <div
+                            // 1. Removed absolute positioning.
+                            // 2. "translate-x-4" moves it 16px to the right (perfect for this width).
+                            className={`w-3 h-3 rounded-full bg-white shadow-sm transition-transform duration-200 ${
+                              selectedCellData.isSpawner
+                                ? "translate-x-4"
+                                : "translate-x-0"
+                            }`}
+                          ></div>
+                        </button>
+                      </div>
+
+                      {selectedCellData.isSpawner && (
+                        <div className="space-y-2">
+                          <div className="flex justify-between items-center text-[10px]">
+                            <span className={T.textDim}>Frequency:</span>
+                            <span className={T.textMain}>
+                              {selectedCellData.spawnInterval || 20} ticks
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className={`text-[10px] ${T.textDim}`}>
+                              Fast
+                            </span>
+                            <input
+                              type="range"
+                              min="5"
+                              max="50"
+                              step="5"
+                              className={`flex-1 min-w-0 h-1 rounded-lg appearance-none cursor-pointer accent-emerald-500 ${
+                                theme === "light"
+                                  ? "bg-slate-300"
+                                  : "bg-slate-700"
+                              }`}
+                              value={selectedCellData.spawnInterval || 20}
+                              onChange={(e) =>
+                                updateSpawnerConfig(
+                                  selectedCell.row,
+                                  selectedCell.col,
+                                  "spawnInterval",
+                                  parseInt(e.target.value)
+                                )
+                              }
+                            />
+                            <span className={`text-[10px] ${T.textDim}`}>
+                              Slow
+                            </span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
                     <div
                       className={`pt-2 border-t mt-2 ${
                         theme === "light"
