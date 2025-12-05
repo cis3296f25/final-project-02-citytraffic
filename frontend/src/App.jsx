@@ -73,6 +73,9 @@ export default function App() {
   const [toolLaneCount, setToolLaneCount] = useState(2);
   const [activeModal, setActiveModal] = useState(null);
 
+  // --- STATE: Placement Logic ---
+  const [pendingLightCoords, setPendingLightCoords] = useState(null);
+
   // --- STATE: Settings & Config ---
   const [autoSpawnEnabled, setAutoSpawnEnabled] = useState(false);
   const [spawnRate, setSpawnRate] = useState(5);
@@ -119,6 +122,11 @@ export default function App() {
     if (r < 0 || r >= g.length || c < 0 || c >= g[0].length) return null;
     return g[r][c];
   };
+
+  // --- 3a. RESET PENDING ON TOOL CHANGE ---
+  useEffect(() => {
+    setPendingLightCoords(null);
+  }, [selectedTool]);
 
   // --- NEW: Handle Grid Resizing (Resolution Change) ---
   const handleGridResize = (multiplier) => {
@@ -227,7 +235,7 @@ export default function App() {
         return true;
       };
 
-      // --- NEW: Individual Spawner Logic ---
+      // --- Individual Spawner Logic ---
       for (let r = 0; r < rows; r++) {
         for (let c = 0; c < cols; c++) {
           const cell = newGrid[r][c];
@@ -248,8 +256,15 @@ export default function App() {
                 spawnDir = "right";
               }
 
+              // --- Randomize Bias based on Selection ---
+              const possibleBiases = cell.spawnerTurnBiases || ["none"];
+              const randomBias =
+                possibleBiases[
+                  Math.floor(Math.random() * possibleBiases.length)
+                ];
+
               cell.hasCar = spawnDir;
-              cell.carConfig = { speed: 1, turnBias: "none" };
+              cell.carConfig = { speed: 1, turnBias: randomBias };
               cell.movementProgress = Math.random() * 200;
               cell.lastSpawnTick = globalTickRef.current;
             }
@@ -284,7 +299,7 @@ export default function App() {
         }
       }
 
-      // [Traffic Lights] (Updated to handle 'hasTrafficLight' property)
+      // [Traffic Lights]
       if (globalTickRef.current % 5 === 0) {
         for (let r = 0; r < rows; r++) {
           for (let c = 0; c < cols; c++) {
@@ -293,7 +308,6 @@ export default function App() {
               cell &&
               (cell.type === "traffic_light" || cell.hasTrafficLight)
             ) {
-              // Ensure config exists
               const config = cell.lightConfig ||
                 cell.config || { green: 10, yellow: 4, red: 10 };
               if (!cell.lightConfig && !cell.config) cell.lightConfig = config;
@@ -305,7 +319,6 @@ export default function App() {
                 cell.lightTimer !== undefined
                   ? cell.lightTimer
                   : cell.timer || 0;
-
               timer += 1;
               const limit = config[state];
 
@@ -316,7 +329,6 @@ export default function App() {
                 else if (state === "yellow") nextState = "red";
                 else if (state === "red") nextState = "green";
 
-                // Update universal props
                 cell.lightState = nextState;
                 cell.state = nextState;
               }
@@ -378,21 +390,30 @@ export default function App() {
           let canMove = false;
 
           let isBlockedByLight = false;
-          const adjOffsets = [
-            { dr: -1, dc: 0 },
-            { dr: 1, dc: 0 },
-            { dr: 0, dc: -1 },
-            { dr: 0, dc: 1 },
-          ];
-          for (const offset of adjOffsets) {
-            const neighbor = getCell(newGrid, r + offset.dr, c + offset.dc);
-            if (
-              neighbor &&
-              (neighbor.type === "traffic_light" || neighbor.hasTrafficLight)
-            ) {
-              const state = neighbor.lightState || neighbor.state || "green";
-              if (state === "yellow" || state === "red")
-                isBlockedByLight = true;
+
+          // --- TRAFFIC LIGHT CHECK ---
+
+          // 1. Skip checks if already inside an intersection (Must clear the box)
+          const isInsideIntersection =
+            cell.type === "traffic_light" ||
+            cell.type === "road_intersection" ||
+            (cell.type && cell.type.includes("intersection"));
+
+          if (!isInsideIntersection) {
+            // A. Check Specific Stop Marker (If linked)
+            if (cell.stopMarker) {
+              const targetLight = getCell(
+                newGrid,
+                cell.stopMarker.r,
+                cell.stopMarker.c
+              );
+              if (targetLight) {
+                const state =
+                  targetLight.lightState || targetLight.state || "green";
+                if (state !== "green") {
+                  isBlockedByLight = true;
+                }
+              }
             }
           }
 
@@ -502,7 +523,21 @@ export default function App() {
             }
 
             if (canMove) {
-              const movingConfig = cell.carConfig;
+              // 1. Clone config
+              let movingConfig = cell.carConfig ? { ...cell.carConfig } : {};
+
+              // --- LOGIC: Reset Priority After Turn ---
+              if (
+                isInsideIntersection &&
+                movingConfig.turnBias &&
+                movingConfig.turnBias !== "none"
+              ) {
+                // If the car is changing direction (Turning)
+                if (nextDir !== direction) {
+                  movingConfig.turnBias = "none";
+                }
+              }
+
               if (cell.type) {
                 newGrid[r][c] = {
                   ...cell,
@@ -526,6 +561,7 @@ export default function App() {
               }
             }
           } else {
+            // STOPPED BY LIGHT: Clamp to line
             newGrid[r][c] = { ...cell, movementProgress: MOVE_THRESHOLD };
           }
         }
@@ -562,14 +598,34 @@ export default function App() {
         if (selectedTool === "select") return prev;
 
         if (newItemOrType === "eraser") {
-          // If we have a traffic light, remove it first, but keep the road?
-          // User request implied they want to place lights on roads.
-          // Standard erasing usually kills the whole cell.
+          // --- DELETION PRIORITY ---
+          // 1. Remove Car
           if (updatedCell.hasCar) {
             updatedCell.hasCar = false;
             updatedCell.carConfig = undefined;
             newGrid[row][col] = updatedCell;
-          } else {
+          }
+          // 2. Remove Stop Line / Marker
+          else if (updatedCell.stopMarker) {
+            delete updatedCell.stopMarker;
+            newGrid[row][col] = updatedCell;
+          }
+          // 3. Remove Overlay Traffic Light
+          else if (updatedCell.hasTrafficLight) {
+            updatedCell.hasTrafficLight = false;
+            updatedCell.lightState = undefined;
+            updatedCell.lightConfig = undefined;
+            updatedCell.lightTimer = undefined;
+            newGrid[row][col] = updatedCell;
+          }
+          // 4. Remove Base Traffic Light (Legacy)
+          else if (updatedCell.type === "traffic_light") {
+            updatedCell.type = "road_intersection";
+            updatedCell.hasTrafficLight = false;
+            newGrid[row][col] = updatedCell;
+          }
+          // 5. Remove Road/Building
+          else {
             updatedCell = null;
             newGrid[row][col] = null;
           }
@@ -585,25 +641,48 @@ export default function App() {
           updatedCell.carConfig = { speed: 1, turnBias: "none" };
           newGrid[row][col] = updatedCell;
         }
-        // --- TRAFFIC LIGHT (Overlay Logic) ---
+        // --- TRAFFIC LIGHT (Two-Step Placement) ---
         else if (newItemOrType === "traffic_light") {
-          if (updatedCell.type && updatedCell.type.startsWith("road")) {
-            updatedCell.hasTrafficLight = true;
-            updatedCell.lightState = "green";
-            updatedCell.lightTimer = 0;
-            updatedCell.lightConfig = { green: 10, yellow: 4, red: 10 };
-          } else {
-            // Fallback: Create intersection with light
-            updatedCell.type = "road_intersection";
-            updatedCell.hasTrafficLight = true;
-            updatedCell.lightState = "green";
-            updatedCell.lightTimer = 0;
-            updatedCell.lightConfig = { green: 10, yellow: 4, red: 10 };
+          // STEP 1: Place Light
+          if (!pendingLightCoords) {
+            if (updatedCell.type && updatedCell.type.startsWith("road")) {
+              updatedCell.hasTrafficLight = true;
+              updatedCell.lightState = "green";
+              updatedCell.lightTimer = 0;
+              updatedCell.lightConfig = { green: 10, yellow: 4, red: 10 };
+            } else {
+              updatedCell.type = "road_intersection";
+              updatedCell.hasTrafficLight = true;
+              updatedCell.lightState = "green";
+              updatedCell.lightTimer = 0;
+              updatedCell.lightConfig = { green: 10, yellow: 4, red: 10 };
+            }
+            newGrid[row][col] = updatedCell;
+            setPendingLightCoords({ row, col });
           }
-          newGrid[row][col] = updatedCell;
-        }
-        // ... (Rest of road types)
-        else if (newItemOrType === "road_divider_vertical") {
+          // STEP 2: Place Stop Marker
+          else {
+            if (updatedCell.type && updatedCell.type.startsWith("road")) {
+              // Calculate Direction
+              const dRow = pendingLightCoords.row - row;
+              const dCol = pendingLightCoords.col - col;
+              let side = "bottom"; // fallback
+
+              if (dRow < 0) side = "top";
+              else if (dRow > 0) side = "bottom";
+              else if (dCol < 0) side = "left";
+              else if (dCol > 0) side = "right";
+
+              updatedCell.stopMarker = {
+                r: pendingLightCoords.row,
+                c: pendingLightCoords.col,
+                side: side,
+              };
+              newGrid[row][col] = updatedCell;
+            }
+            setPendingLightCoords(null);
+          }
+        } else if (newItemOrType === "road_divider_vertical") {
           updatedCell.type = newItemOrType;
           updatedCell.lanePosition = 0;
           newGrid[row][col] = updatedCell;
@@ -674,7 +753,15 @@ export default function App() {
       });
       setStep((s) => s + 1);
     },
-    [step, selectedTool, isPlaying, rows, cols, toolLaneCount]
+    [
+      step,
+      selectedTool,
+      isPlaying,
+      rows,
+      cols,
+      toolLaneCount,
+      pendingLightCoords,
+    ]
   );
 
   // --- 7. LOGIC: Update Configs ---
@@ -690,6 +777,9 @@ export default function App() {
           newGrid[row][col].lastSpawnTick = globalTickRef.current;
           if (!newGrid[row][col].spawnInterval)
             newGrid[row][col].spawnInterval = 20;
+          // Default bias if not present
+          if (!newGrid[row][col].spawnerTurnBiases)
+            newGrid[row][col].spawnerTurnBiases = ["none"];
         }
       }
       return [...prev.slice(0, step + 1), newGrid];
@@ -714,8 +804,26 @@ export default function App() {
           ...config,
           [key]: parseInt(value),
         };
-        // Sync legacy prop just in case
         newGrid[row][col].config = newGrid[row][col].lightConfig;
+      }
+      return [...prev.slice(0, step + 1), newGrid];
+    });
+    setStep((s) => s + 1);
+  };
+
+  // --- NEW: Toggle Light State Helper ---
+  const updateTrafficLightState = (row, col, newState) => {
+    setHistory((prev) => {
+      const current = prev[step];
+      const newGrid = current.map((r) =>
+        r.map((cell) => (cell ? { ...cell } : null))
+      );
+      const cell = newGrid[row][col];
+      if (cell && (cell.type === "traffic_light" || cell.hasTrafficLight)) {
+        cell.lightState = newState;
+        cell.state = newState;
+        cell.lightTimer = 0;
+        cell.timer = 0;
       }
       return [...prev.slice(0, step + 1), newGrid];
     });
@@ -730,7 +838,7 @@ export default function App() {
       );
       if (newGrid[row][col] && newGrid[row][col].type.startsWith("road")) {
         newGrid[row][col].flowDirection = direction;
-        newGrid[row][col].flowPriority = null; // Clear priority
+        newGrid[row][col].flowPriority = null;
       }
       return [...prev.slice(0, step + 1), newGrid];
     });
@@ -1050,6 +1158,13 @@ export default function App() {
         />
       )}
 
+      {/* --- PENDING TOOLTIP (New) --- */}
+      {pendingLightCoords && (
+        <div className="absolute top-24 left-1/2 -translate-x-1/2 z-50 bg-yellow-500 text-black px-4 py-2 rounded-full font-bold text-sm shadow-lg animate-bounce">
+          👇 Select a road for the Stop Line
+        </div>
+      )}
+
       {/* --- Sidebar Mobile Toggle --- */}
       <div className="absolute top-4 left-4 z-50">
         <button
@@ -1281,11 +1396,40 @@ export default function App() {
               </div>
             )}
 
-            {/* ... (Traffic light panel) ... */}
-            {selectedCell &&
-              selectedCellData &&
-              (selectedCellData.type === "traffic_light" ||
-                selectedCellData.hasTrafficLight) && (
+            {/* --- PROPERTIES PANEL: Traffic Light (Includes Linked Signals) --- */}
+            {(() => {
+              // 1. Determine which light to show (Selected directly OR Linked via Stop Line)
+              let activeLight = null;
+              let activeCoords = null;
+              let isLinked = false;
+
+              if (selectedCellData) {
+                if (
+                  selectedCellData.type === "traffic_light" ||
+                  selectedCellData.hasTrafficLight
+                ) {
+                  // Case A: Directly selected a light
+                  activeLight = selectedCellData;
+                  activeCoords = { r: selectedCell.row, c: selectedCell.col };
+                } else if (selectedCellData.stopMarker) {
+                  // Case B: Selected a stop line -> Fetch the linked light
+                  const { r, c } = selectedCellData.stopMarker;
+                  const target = grid[r] && grid[r][c];
+                  if (
+                    target &&
+                    (target.type === "traffic_light" || target.hasTrafficLight)
+                  ) {
+                    activeLight = target;
+                    activeCoords = { r, c };
+                    isLinked = true;
+                  }
+                }
+              }
+
+              // If no valid light found, don't render panel
+              if (!activeLight) return null;
+
+              return (
                 <div
                   className={`mb-6 p-4 rounded-xl border-l-4 border-blue-500 shadow-md animate-fadeIn ${T.panelBg} ${T.panelBorder} border`}
                 >
@@ -1293,7 +1437,7 @@ export default function App() {
                     <h2
                       className={`text-sm font-bold uppercase tracking-wider ${T.textMain}`}
                     >
-                      🚦 Signal Config
+                      {isLinked ? "🚦 Linked Signal" : "🚦 Signal Config"}
                     </h2>
                     <button
                       onClick={() => setSelectedCell(null)}
@@ -1302,6 +1446,77 @@ export default function App() {
                       Close
                     </button>
                   </div>
+
+                  {/* --- Current Status (INTERACTIVE BUTTON + TIMER) --- */}
+                  <div className="mb-4 flex items-center justify-between p-2 rounded-lg bg-black/10 border border-black/5">
+                    <span className={`text-xs font-bold ${T.textDim}`}>
+                      Current State:
+                    </span>
+                    <div className="flex items-center">
+                      <button
+                        onClick={() => {
+                          const nextState =
+                            (activeLight.lightState || activeLight.state) ===
+                            "green"
+                              ? "yellow"
+                              : (activeLight.lightState ||
+                                  activeLight.state) === "yellow"
+                              ? "red"
+                              : "green";
+                          updateTrafficLightState(
+                            activeCoords.r,
+                            activeCoords.c,
+                            nextState
+                          );
+                        }}
+                        className={`px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wide border flex items-center gap-1.5 transition-all hover:brightness-110 active:scale-95 ${
+                          (activeLight.lightState || activeLight.state) ===
+                          "green"
+                            ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20"
+                            : (activeLight.lightState || activeLight.state) ===
+                              "yellow"
+                            ? "bg-yellow-500/10 text-yellow-500 border-yellow-500/20"
+                            : "bg-red-500/10 text-red-500 border-red-500/20"
+                        }`}
+                      >
+                        <div
+                          className={`w-1.5 h-1.5 rounded-full ${
+                            (activeLight.lightState || activeLight.state) ===
+                            "green"
+                              ? "bg-emerald-500"
+                              : (activeLight.lightState ||
+                                  activeLight.state) === "yellow"
+                              ? "bg-yellow-500"
+                              : "bg-red-500"
+                          }`}
+                        ></div>
+                        {activeLight.lightState || activeLight.state || "GREEN"}
+                      </button>
+
+                      {/* --- RE-ADDED: Timer Display --- */}
+                      <div className="ml-4 whitespace-nowrap text-[10px] font-mono font-bold opacity-70 text-slate-400">
+                        ⏱{" "}
+                        {activeLight.lightTimer !== undefined
+                          ? activeLight.lightTimer
+                          : activeLight.timer || 0}
+                        /
+                        {
+                          (activeLight.lightConfig ||
+                            activeLight.config || {
+                              green: 10,
+                              yellow: 4,
+                              red: 10,
+                            })[
+                            activeLight.lightState ||
+                              activeLight.state ||
+                              "green"
+                          ]
+                        }
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* --- Configuration Inputs --- */}
                   <div className="space-y-3">
                     <div className="grid grid-cols-3 gap-2">
                       {["green", "yellow", "red"].map((color) => (
@@ -1315,14 +1530,14 @@ export default function App() {
                             type="number"
                             min="1"
                             value={
-                              selectedCellData.lightConfig?.[color] ||
-                              selectedCellData.config?.[color] ||
+                              activeLight.lightConfig?.[color] ||
+                              activeLight.config?.[color] ||
                               10
                             }
                             onChange={(e) =>
                               updateTrafficLightConfig(
-                                selectedCell.row,
-                                selectedCell.col,
+                                activeCoords.r, // Use the LIGHT's coordinates, not the selected cell's
+                                activeCoords.c,
                                 color,
                                 e.target.value
                               )
@@ -1338,7 +1553,8 @@ export default function App() {
                     </div>
                   </div>
                 </div>
-              )}
+              );
+            })()}
 
             {/* ... (Car Settings Panel) ... */}
             {selectedCell && selectedCellData && selectedCellData.hasCar && (
@@ -1516,9 +1732,6 @@ export default function App() {
                               !selectedCellData.isSpawner
                             )
                           }
-                          // 1. "w-9" gives a bit more breathing room (36px).
-                          // 2. "flex items-center" ensures perfect vertical centering (fixes Y-axis).
-                          // 3. "p-1" adds consistent padding around the ball.
                           className={`w-9 h-5 rounded-full transition-colors flex items-center p-1 ${
                             selectedCellData.isSpawner
                               ? "bg-emerald-500"
@@ -1526,8 +1739,6 @@ export default function App() {
                           }`}
                         >
                           <div
-                            // 1. Removed absolute positioning.
-                            // 2. "translate-x-4" moves it 16px to the right (perfect for this width).
                             className={`w-3 h-3 rounded-full bg-white shadow-sm transition-transform duration-200 ${
                               selectedCellData.isSpawner
                                 ? "translate-x-4"
@@ -1538,14 +1749,25 @@ export default function App() {
                       </div>
 
                       {selectedCellData.isSpawner && (
-                        <div className="space-y-2">
-                          <div className="flex justify-between items-center text-[10px]">
-                            <span className={T.textDim}>Frequency:</span>
-                            <span className={T.textMain}>
+                        <div className="space-y-3">
+                          {/* Numerical Value Display */}
+                          <div
+                            className={`flex justify-between items-center text-xs px-1 ${T.textDim}`}
+                          >
+                            <span>Frequency:</span>
+                            <span
+                              className={`font-mono font-bold ${
+                                theme === "light"
+                                  ? "text-slate-800"
+                                  : "text-white"
+                              }`}
+                            >
                               {selectedCellData.spawnInterval || 20} ticks
                             </span>
                           </div>
-                          <div className="flex items-center gap-2">
+
+                          {/* Slider */}
+                          <div className="flex items-center gap-2 mb-2">
                             <span className={`text-[10px] ${T.textDim}`}>
                               Fast
                             </span>
@@ -1554,7 +1776,7 @@ export default function App() {
                               min="5"
                               max="50"
                               step="5"
-                              className={`flex-1 min-w-0 h-1 rounded-lg appearance-none cursor-pointer accent-emerald-500 ${
+                              className={`flex-1 min-w-0 h-1.5 rounded-lg appearance-none cursor-pointer accent-emerald-500 ${
                                 theme === "light"
                                   ? "bg-slate-300"
                                   : "bg-slate-700"
@@ -1572,6 +1794,61 @@ export default function App() {
                             <span className={`text-[10px] ${T.textDim}`}>
                               Slow
                             </span>
+                          </div>
+
+                          {/* --- NEW: Multi-Select Turn Priority Buttons --- */}
+                          <div className="flex flex-col gap-1">
+                            <span className={`text-[10px] ${T.textDim}`}>
+                              Random Turn Bias
+                            </span>
+                            <div className="flex gap-1 w-full">
+                              {["left", "none", "right"].map((bias) => {
+                                const currentBiases =
+                                  selectedCellData.spawnerTurnBiases || [
+                                    "none",
+                                  ];
+                                const isSelected = currentBiases.includes(bias);
+
+                                return (
+                                  <button
+                                    key={bias}
+                                    onClick={() => {
+                                      let newBiases;
+                                      if (isSelected) {
+                                        // Deselect (prevent empty array)
+                                        newBiases = currentBiases.filter(
+                                          (b) => b !== bias
+                                        );
+                                        if (newBiases.length === 0)
+                                          newBiases = [bias];
+                                      } else {
+                                        // Select
+                                        newBiases = [...currentBiases, bias];
+                                      }
+                                      updateSpawnerConfig(
+                                        selectedCell.row,
+                                        selectedCell.col,
+                                        "spawnerTurnBiases",
+                                        newBiases
+                                      );
+                                    }}
+                                    className={`flex-1 py-1.5 px-1 rounded text-[10px] border capitalize transition-all ${
+                                      isSelected
+                                        ? "bg-emerald-600 border-emerald-400 text-white font-bold"
+                                        : theme === "light"
+                                        ? "bg-slate-100 border-slate-300 text-slate-500"
+                                        : "bg-slate-700 border-slate-600 text-slate-400"
+                                    }`}
+                                  >
+                                    {bias === "left"
+                                      ? "⬅ Left"
+                                      : bias === "right"
+                                      ? "Right ➡"
+                                      : "Straight"}
+                                  </button>
+                                );
+                              })}
+                            </div>
                           </div>
                         </div>
                       )}
@@ -1821,7 +2098,40 @@ export default function App() {
             </button>
             <button
               onClick={() => {
-                if (prePlayStep !== null) setStep(prePlayStep);
+                if (prePlayStep !== null) {
+                  // --- LOGIC: RESET TRAFFIC LIGHTS ---
+                  // 1. Get the grid from the restore point
+                  const originalGrid = history[prePlayStep];
+
+                  // 2. Create a clean copy.
+                  // Reset timer to 0, but KEEP the start state (color) from originalGrid.
+                  const resetGrid = originalGrid.map((row) =>
+                    row.map((cell) => {
+                      if (!cell) return null;
+                      if (
+                        cell.type === "traffic_light" ||
+                        cell.hasTrafficLight
+                      ) {
+                        return {
+                          ...cell,
+                          // Removed forced "green" state.
+                          // It now keeps the state it had when simulation started.
+                          lightTimer: 0,
+                          timer: 0,
+                        };
+                      }
+                      return { ...cell };
+                    })
+                  );
+
+                  // 3. Update history with the reset grid and jump to it
+                  setHistory((prev) => {
+                    const newHist = [...prev];
+                    newHist[prePlayStep] = resetGrid;
+                    return newHist;
+                  });
+                  setStep(prePlayStep);
+                }
                 setIsPlaying(false);
               }}
               className={`px-4 py-2 rounded-full text-xs border ${

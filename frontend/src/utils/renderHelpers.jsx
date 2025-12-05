@@ -10,7 +10,7 @@ import {
   DECORATION_PALETTE_ITEMS,
 } from "../constants";
 
-// --- 1. Car Renderer ---
+// ... (renderCar, renderTree, renderBuilding, renderDirectionArrow remain unchanged) ...
 export const renderCar = (direction) => {
   let rotation = 0;
   if (direction === "right") rotation = 90;
@@ -49,7 +49,6 @@ export const renderCar = (direction) => {
   );
 };
 
-// --- 2. Traffic Light Renderer (UPDATED: Strictly on Road & No Cutoff) ---
 export const renderTrafficLight = (lightState) => {
   const colors = {
     green: "#22c55e",
@@ -59,15 +58,9 @@ export const renderTrafficLight = (lightState) => {
   };
   const currentState = lightState || "green";
 
-  // Positioned at (55, 20) with scale(0.35)
-  // This keeps the box and the pole strictly within the 0-100 cell bounds.
-  // y=20 ensures it sits visually "on" the road (which starts at y=10).
   return (
     <g transform="translate(55, 20) scale(0.35)">
-      {/* Short Pole connecting to top */}
       <line x1="25" y1="0" x2="25" y2="-15" stroke="#374151" strokeWidth="6" />
-
-      {/* The Box */}
       <rect
         x="0"
         y="0"
@@ -79,7 +72,6 @@ export const renderTrafficLight = (lightState) => {
         strokeWidth="4"
         className="shadow-sm"
       />
-      {/* Lights */}
       <circle
         cx="25"
         cy="25"
@@ -102,7 +94,40 @@ export const renderTrafficLight = (lightState) => {
   );
 };
 
-// --- 3. Individual Tree Renderer ---
+// --- 3. Stop Line Renderer (UPDATED) ---
+const renderStopLine = (side) => {
+  let coords = { x1: 10, y1: 90, x2: 90, y2: 90 }; // Default
+
+  // Orientation Logic:
+  // - Top/Bottom side = Horizontal Line
+  // - Left/Right side = Vertical Line
+
+  if (side === "top") {
+    coords = { x1: 10, y1: 10, x2: 90, y2: 10 };
+  } else if (side === "bottom") {
+    coords = { x1: 10, y1: 90, x2: 90, y2: 90 };
+  } else if (side === "left") {
+    coords = { x1: 10, y1: 10, x2: 10, y2: 90 };
+  } else if (side === "right") {
+    coords = { x1: 90, y1: 10, x2: 90, y2: 90 };
+  }
+
+  return (
+    <g>
+      <line
+        x1={coords.x1}
+        y1={coords.y1}
+        x2={coords.x2}
+        y2={coords.y2}
+        stroke="white"
+        strokeWidth="6"
+        opacity="0.6"
+        strokeDasharray="10,5"
+      />
+    </g>
+  );
+};
+
 const renderTree = () => {
   return (
     <g transform="translate(50, 85)">
@@ -118,7 +143,6 @@ const renderTree = () => {
   );
 };
 
-// --- 4. Individual Building Renderer ---
 const renderBuilding = () => {
   return (
     <g>
@@ -149,7 +173,6 @@ const renderBuilding = () => {
   );
 };
 
-// --- 5. Flow Direction Arrow Renderer ---
 export const renderDirectionArrow = (direction) => {
   let content = null;
   let rot = 0;
@@ -236,11 +259,12 @@ export const renderDirectionArrow = (direction) => {
   );
 };
 
-// --- 6. Main Cell Content Renderer ---
+// --- 7. Main Cell Content Renderer ---
 export const renderCellContent = (cellData, neighborInfo) => {
   const cellType = cellData?.type;
   const carDirection = cellData?.hasCar;
   const flowDirection = cellData?.flowDirection;
+  const stopMarker = cellData?.stopMarker;
   const content = [];
 
   if (cellType) {
@@ -265,9 +289,7 @@ export const renderCellContent = (cellData, neighborInfo) => {
           </foreignObject>
         );
       }
-    }
-    // Roads & Traffic Lights (Base Layer)
-    else if (cellType.startsWith("road_") || cellType === "traffic_light") {
+    } else if (cellType.startsWith("road_") || cellType === "traffic_light") {
       const strokeColor = "#334155";
       const strokeWidth = 80;
       const center = 50;
@@ -405,12 +427,8 @@ export const renderCellContent = (cellData, neighborInfo) => {
               strokeDasharray="12,12"
             />
           );
-      }
-      // --- INTERSECTION (Modified for Corner Filling) ---
-      else if (effectiveType === "road_intersection") {
+      } else if (effectiveType === "road_intersection") {
         const { up, down, left, right } = neighborInfo;
-
-        // Draw the Arms (standard lines)
         if (up)
           content.push(
             <line
@@ -460,9 +478,7 @@ export const renderCellContent = (cellData, neighborInfo) => {
             />
           );
 
-        // --- PLAZA CORNER FILLING ---
-        // If two adjacent sides are connected, fill the corner between them to make a solid square.
-        // This closes the "gaps" in 2x2 or 3x3 arrangements.
+        // Plaza Corner Filling
         if (up && right)
           content.push(
             <rect
@@ -508,7 +524,6 @@ export const renderCellContent = (cellData, neighborInfo) => {
             />
           );
 
-        // Center Cap (Standard intersection logic)
         if (!(up || down || left || right))
           content.push(
             <circle
@@ -575,7 +590,16 @@ export const renderCellContent = (cellData, neighborInfo) => {
     );
   }
 
-  // 8. Draw Car
+  // 8. Render STOP MARKER (Subtle)
+  if (stopMarker) {
+    content.push(
+      <React.Fragment key="stop_marker">
+        {renderStopLine(stopMarker.side)}
+      </React.Fragment>
+    );
+  }
+
+  // 9. Draw Car
   if (carDirection) {
     content.push(
       <React.Fragment key="car">{renderCar(carDirection)}</React.Fragment>
