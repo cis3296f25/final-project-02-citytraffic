@@ -5,12 +5,10 @@
  * CONTENTS:
  * - renderCar: Draws the car and rotates it based on direction.
  * - renderTrafficLight: Draws the signal box and active lights.
+ * - renderTree: Draws a standalone SVG tree.
+ * - renderBuilding: Draws a standalone SVG building.
  * - renderDirectionArrow: Draws straight and curved (turn) arrows for traffic flow.
  * - renderCellContent: The main orchestrator that determines what SVG to draw based on cell type.
- *
- * DEPENDENCIES:
- * - React
- * - Palette Constants (to look up emojis for simple items)
  */
 
 import React from "react";
@@ -108,7 +106,64 @@ export const renderTrafficLight = (lightState) => {
   );
 };
 
-// --- 3. Flow Direction Arrow Renderer ---
+// --- 3. Individual Tree Renderer ---
+const renderTree = () => {
+  return (
+    <g transform="translate(50, 85)">
+      {/* Shadow */}
+      <ellipse cx="0" cy="0" rx="25" ry="10" fill="rgba(0,0,0,0.2)" />
+
+      {/* Trunk */}
+      <rect x="-6" y="-30" width="12" height="30" fill="#78350f" />
+
+      {/* Leaves (Layered) */}
+      <g transform="translate(0, -35)">
+        <circle cx="0" cy="0" r="25" fill="#15803d" /> {/* Dark Green Base */}
+        <circle cx="-12" cy="-10" r="20" fill="#16a34a" /> {/* Mid Green */}
+        <circle cx="12" cy="-10" r="20" fill="#16a34a" />
+        <circle cx="0" cy="-25" r="18" fill="#22c55e" /> {/* Light Top */}
+      </g>
+    </g>
+  );
+};
+
+// --- 4. Individual Building Renderer ---
+const renderBuilding = () => {
+  return (
+    <g>
+      {/* Shadow */}
+      <rect
+        x="10"
+        y="10"
+        width="80"
+        height="80"
+        rx="4"
+        fill="rgba(0,0,0,0.2)"
+      />
+      {/* Base */}
+      <rect
+        x="10"
+        y="5"
+        width="80"
+        height="85"
+        rx="4"
+        fill="#64748b" // slate-500
+        stroke="#334155"
+        strokeWidth="3"
+      />
+      {/* Roof */}
+      <rect x="15" y="10" width="70" height="70" fill="#f1f5f9" />
+
+      {/* AC Units / Detail */}
+      <rect x="20" y="15" width="25" height="25" fill="#93c5fd" />
+      <rect x="55" y="15" width="25" height="25" fill="#93c5fd" />
+      <rect x="20" y="50" width="25" height="25" fill="#93c5fd" />
+      <rect x="55" y="50" width="25" height="25" fill="#93c5fd" />
+    </g>
+  );
+};
+
+// --- 5. Flow Direction Arrow Renderer ---
 export const renderDirectionArrow = (direction) => {
   let content = null;
   let rot = 0;
@@ -199,7 +254,7 @@ export const renderDirectionArrow = (direction) => {
   );
 };
 
-// --- 4. Main Cell Content Renderer ---
+// --- 6. Main Cell Content Renderer ---
 export const renderCellContent = (cellData, neighborInfo) => {
   const cellType = cellData?.type;
   const carDirection = cellData?.hasCar;
@@ -207,7 +262,7 @@ export const renderCellContent = (cellData, neighborInfo) => {
   const content = [];
 
   if (cellType) {
-    // 4a. Traffic Light
+    // 6a. Traffic Light
     if (cellType === "traffic_light") {
       content.push(
         <React.Fragment key="light">
@@ -215,13 +270,25 @@ export const renderCellContent = (cellData, neighborInfo) => {
         </React.Fragment>
       );
     }
-    // 4b. Simple Emoji Items (Buildings, Trees, etc.)
+    // 6b. NEW: Standalone SVG Tree
+    else if (cellType === "tree") {
+      content.push(<React.Fragment key="tree">{renderTree()}</React.Fragment>);
+    }
+    // 6c. NEW: Standalone SVG Building
+    else if (cellType === "building") {
+      content.push(
+        <React.Fragment key="building">{renderBuilding()}</React.Fragment>
+      );
+    }
+    // 6d. Simple Emoji Items (Fallback)
     else if (!cellType.startsWith("road_")) {
       const item =
         MAIN_PALETTE_ITEMS.find((p) => p.type === cellType) ||
         ROAD_PALETTE_ITEMS.find((p) => p.type === cellType) ||
         DECORATION_PALETTE_ITEMS.find((p) => p.type === cellType);
-      if (item) {
+
+      // Ensure we don't double render if 'tree' or 'building' slip through here
+      if (item && cellType !== "tree" && cellType !== "building") {
         content.push(
           <foreignObject key="base" x="0" y="0" width="100" height="100">
             <div className="w-full h-full flex items-center justify-center text-4xl drop-shadow-md">
@@ -231,7 +298,7 @@ export const renderCellContent = (cellData, neighborInfo) => {
         );
       }
     }
-    // 4c. Complex Roads (Dividers, Multi-lanes, Intersections)
+    // 6e. Complex Roads (Dividers, Multi-lanes, Intersections)
     else {
       const strokeColor = "#334155";
       const strokeWidth = 80;
@@ -507,7 +574,7 @@ export const renderCellContent = (cellData, neighborInfo) => {
     }
   }
 
-  // 5. Draw Car on top if present
+  // 7. Draw Car on top if present
   if (carDirection) {
     content.push(
       <React.Fragment key="car">{renderCar(carDirection)}</React.Fragment>

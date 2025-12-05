@@ -339,10 +339,10 @@ export default function App() {
             }
           }
 
-          let canMove = false;
           let nextR = r,
             nextC = c,
             nextDir = direction;
+          let canMove = false;
 
           let isBlockedByLight = false;
           const adjOffsets = [
@@ -361,98 +361,140 @@ export default function App() {
           }
 
           if (!isBlockedByLight) {
-            if (direction === "up") nextR--;
-            if (direction === "down") nextR++;
-            if (direction === "left") nextC--;
-            if (direction === "right") nextC++;
+            // MOVEMENT LOGIC REFACTOR:
+            // Instead of checking Straight then Turning, we gather ALL valid moves first.
+            const possibleMoves = [];
 
-            const isOffScreen =
-              nextR < 0 || nextR >= rows || nextC < 0 || nextC >= cols;
-            let tryToTurn = false;
+            // Helper to get coordinates
+            const getCoords = (d) => {
+              let nr = r,
+                nc = c;
+              if (d === "up") nr--;
+              if (d === "down") nr++;
+              if (d === "left") nc--;
+              if (d === "right") nc++;
+              return { nr, nc };
+            };
 
-            if (isOffScreen) {
-              canMove = true;
-            } else {
-              const targetCell = getCell(newGrid, nextR, nextC);
+            // Helper to validate a move (Connectivity + Geometry)
+            const isValidMove = (dir) => {
+              // 1. Flow Override Check: If I'm forced, I must obey.
               if (
                 cell.flowDirection &&
-                cell.flowDirection.startsWith("turn_")
-              ) {
-                const parts = cell.flowDirection.split("_");
-                const exit = parts[2];
-                nextDir = exit;
-                nextR = r;
-                nextC = c;
-                if (nextDir === "up") nextR--;
-                if (nextDir === "down") nextR++;
-                if (nextDir === "left") nextC--;
-                if (nextDir === "right") nextC++;
+                cell.flowDirection !== dir &&
+                !cell.flowDirection.startsWith("turn_")
+              )
+                return false;
 
-                if (isTargetCompatible(getCell(newGrid, nextR, nextC), nextDir))
-                  canMove = true;
-              } else if (targetCell && targetCell.type.startsWith("road")) {
-                if (isTargetCompatible(targetCell, nextDir)) canMove = true;
-                else tryToTurn = true;
-              } else {
-                tryToTurn = true;
+              const { nr, nc } = getCoords(dir);
+              const isOffScreen = nr < 0 || nr >= rows || nc < 0 || nc >= cols;
+
+              if (isOffScreen) return true; // Edge exit is valid
+
+              const target = getCell(newGrid, nr, nc);
+              if (!target) return false;
+
+              // 2. Connectivity Check
+              if (!isTargetCompatible(target, dir)) return false;
+
+              // 3. GEOMETRY CHECK (Prevent Parallel Hopping)
+              // If moving "Left/Right", target must NOT be purely Vertical (unless Intersection)
+              const tType = target.type || "";
+              const isTargetVertical = tType.includes("vertical");
+              const isTargetHorizontal = tType.includes("horizontal");
+              const isTargetIntersection = tType.includes("intersection");
+
+              if (
+                (dir === "left" || dir === "right") &&
+                isTargetVertical &&
+                !isTargetIntersection
+              )
+                return false;
+              if (
+                (dir === "up" || dir === "down") &&
+                isTargetHorizontal &&
+                !isTargetIntersection
+              )
+                return false;
+
+              return true;
+            };
+
+            // A. Check Straight (Current Direction)
+            if (isValidMove(direction)) {
+              possibleMoves.push(direction);
+            }
+
+            // B. Check Turns (Perpendicular)
+            if (direction === "up" || direction === "down") {
+              if (isValidMove("left")) possibleMoves.push("left");
+              if (isValidMove("right")) possibleMoves.push("right");
+            } else {
+              if (isValidMove("up")) possibleMoves.push("up");
+              if (isValidMove("down")) possibleMoves.push("down");
+            }
+
+            // C. Forced Turn Logic (Visual Curves)
+            if (cell.flowDirection && cell.flowDirection.startsWith("turn_")) {
+              const exit = cell.flowDirection.split("_")[2];
+              // Overwrite logic: You MUST take this turn if valid
+              if (isValidMove(exit)) {
+                possibleMoves.length = 0; // Clear choices
+                possibleMoves.push(exit);
               }
             }
 
-            if (!canMove && tryToTurn) {
-              const possibleTurns = [];
-              const currentFlow = cell.flowDirection;
-              const checkTurn = (dir) => {
-                if (currentFlow && currentFlow !== dir) return;
-                let dr = 0,
-                  dc = 0;
-                if (dir === "up") dr = -1;
-                if (dir === "down") dr = 1;
-                if (dir === "left") dc = -1;
-                if (dir === "right") dc = 1;
-                const t = getCell(newGrid, r + dr, c + dc);
-                if (isTargetCompatible(t, dir)) possibleTurns.push(dir);
-              };
+            // D. DECISION TIME
+            if (possibleMoves.length > 0) {
+              let chosen = null;
 
-              if (direction === "up" || direction === "down") {
-                checkTurn("left");
-                checkTurn("right");
-              } else {
-                checkTurn("up");
-                checkTurn("down");
-              }
+              // 1. Apply Bias (Left/Right Priority)
+              const config = cell.carConfig || {};
+              const bias = config.turnBias || "none";
 
-              if (possibleTurns.length > 0) {
-                const config = cell.carConfig || {};
-                const bias = config.turnBias || "none";
-                let chosenDir = null;
-                if (bias !== "none") {
-                  const getRelativeDir = (currentFacing, turnType) => {
-                    const dirs = ["up", "right", "down", "left"];
-                    const idx = dirs.indexOf(currentFacing);
-                    if (idx === -1) return null;
-                    if (turnType === "left") return dirs[(idx + 3) % 4];
-                    if (turnType === "right") return dirs[(idx + 1) % 4];
-                    return null;
-                  };
-                  const preferredDir = getRelativeDir(direction, bias);
-                  if (preferredDir && possibleTurns.includes(preferredDir))
-                    chosenDir = preferredDir;
+              if (bias !== "none") {
+                const getRelativeDir = (currentFacing, turnType) => {
+                  const dirs = ["up", "right", "down", "left"];
+                  const idx = dirs.indexOf(currentFacing);
+                  if (idx === -1) return null;
+                  if (turnType === "left") return dirs[(idx + 3) % 4];
+                  if (turnType === "right") return dirs[(idx + 1) % 4];
+                  return null;
+                };
+                const preferredDir = getRelativeDir(direction, bias);
+                if (preferredDir && possibleMoves.includes(preferredDir)) {
+                  chosen = preferredDir;
                 }
-                if (!chosenDir)
-                  chosenDir =
-                    possibleTurns[
-                      Math.floor(Math.random() * possibleTurns.length)
-                    ];
-
-                nextDir = chosenDir;
-                nextR = r;
-                nextC = c;
-                if (nextDir === "up") nextR--;
-                if (nextDir === "down") nextR++;
-                if (nextDir === "left") nextC--;
-                if (nextDir === "right") nextC++;
-                canMove = true;
               }
+
+              // 2. Fallback to Straight if bias didn't trigger
+              if (!chosen && possibleMoves.includes(direction)) {
+                chosen = direction;
+              }
+
+              // 3. Fallback to Random if straight is blocked
+              if (!chosen) {
+                chosen =
+                  possibleMoves[
+                    Math.floor(Math.random() * possibleMoves.length)
+                  ];
+              }
+
+              // E. EXECUTE
+              nextDir = chosen;
+              const { nr, nc } = getCoords(nextDir);
+              nextR = nr;
+              nextC = nc;
+              canMove = true;
+            } else {
+              // No valid moves (Stuck or blocked)
+              canMove = false;
+              // But preserve "trying to move" state visually if desired
+              newGrid[r][c] = {
+                ...cell,
+                hasCar: direction, // Keep facing same way
+                movementProgress: MOVE_THRESHOLD,
+              };
             }
 
             if (canMove) {
@@ -467,6 +509,8 @@ export default function App() {
               } else {
                 newGrid[r][c] = null;
               }
+
+              // Only spawn in new cell if on grid
               if (newGrid[nextR] && newGrid[nextR][nextC] !== undefined) {
                 const target = newGrid[nextR][nextC];
                 const newCellData = target
@@ -478,12 +522,6 @@ export default function App() {
                 newGrid[nextR][nextC] = newCellData;
                 movedCars.add(`${nextR},${nextC}`);
               }
-            } else {
-              newGrid[r][c] = {
-                ...cell,
-                hasCar: nextDir,
-                movementProgress: MOVE_THRESHOLD,
-              };
             }
           } else {
             newGrid[r][c] = { ...cell, movementProgress: MOVE_THRESHOLD };
