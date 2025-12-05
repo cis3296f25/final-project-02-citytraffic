@@ -1,26 +1,17 @@
 /**
- * FILE PURPOSE:
- * The Main Application Component.
- *
- * RESPONSIBILITIES:
- * - Manages Global State (User, Grid History, Selection, Play/Pause).
- * - Runs the Simulation Loop (Traffic logic, Car movement).
- * - Handles User Interactions (Clicking, Dragging, Key presses).
- * - Orchestrates the layout of the Sidebar and Main Stage.
- * - Manages Themes (Light/Dark) and Grid Resizing.
- *
- * DEPENDENCIES:
- * - ./components/* (UI Building Blocks)
- * - ./constants (Configuration)
- * - Firebase (Auth)
+ * Main Application Entry Point.
+ * * This component orchestrates the entire traffic simulation, including:
+ * - Managing the grid state and simulation history (undo/redo).
+ * - Running the main simulation loop (car movement, traffic lights).
+ * - Handling user input (painting roads, configuration).
+ * - Managing UI state (modals, sidebar, themes).
+ * * @module App
  */
 
 import React, { useState, useEffect, useCallback, useRef } from "react";
-// --- FIREBASE IMPORTS ---
 import { auth } from "./firebase";
 import { onAuthStateChanged } from "firebase/auth";
 
-// --- COMPONENT IMPORTS ---
 import { Grid } from "./components/Grid";
 import PaletteItem from "./components/PaletteItem";
 import LoginScreen from "./components/LoginScreen";
@@ -36,7 +27,6 @@ import {
   BackArrowIcon,
 } from "./components/Icons";
 
-// --- CONSTANTS ---
 import {
   MAIN_PALETTE_ITEMS,
   ROAD_PALETTE_ITEMS,
@@ -45,23 +35,28 @@ import {
   THEMES,
 } from "./constants";
 
-// --- Helper Functions ---
+/**
+ * Creates a 2D array representing the grid filled with null values.
+ * * @param {number} rows - Number of rows in the grid.
+ * @param {number} cols - Number of columns in the grid.
+ * @returns {Array<Array<null>>} A 2D array initialized with nulls.
+ */
 const createEmptyGrid = (rows, cols) =>
   Array.from({ length: rows }, () => Array(cols).fill(null));
 
 export default function App() {
-  // --- STATE: Auth ---
+  // Authentication State
   const [user, setUser] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
 
-  // --- STATE: Grid & History ---
+  // Grid & Simulation History State
   const [rows, setRows] = useState(16);
   const [cols, setCols] = useState(25);
   const [gridMultiplier, setGridMultiplier] = useState(1.0);
   const [history, setHistory] = useState([createEmptyGrid(16, 25)]);
   const [step, setStep] = useState(0);
 
-  // --- STATE: Tools & UI ---
+  // UI & Tool Selection State
   const [selectedTool, setSelectedTool] = useState("select");
   const [isMouseDown, setIsMouseDown] = useState(false);
   const [paletteMode, setPaletteMode] = useState("main");
@@ -73,25 +68,22 @@ export default function App() {
   const [toolLaneCount, setToolLaneCount] = useState(2);
   const [activeModal, setActiveModal] = useState(null);
 
-  // --- STATE: Placement Logic ---
+  // Placement Logic State
   const [pendingLightCoords, setPendingLightCoords] = useState(null);
 
-  // --- STATE: Settings & Config ---
+  // Configuration State
   const [autoSpawnEnabled, setAutoSpawnEnabled] = useState(false);
   const [spawnRate, setSpawnRate] = useState(5);
   const [theme, setTheme] = useState("dark");
 
-  // --- REFS (Simulation Performance) ---
+  // Performance Refs
   const globalTickRef = useRef(0);
   const simulationState = useRef({
     history: [createEmptyGrid(16, 25)],
     step: 0,
   });
-
-  // --- FIX 1: Defined missing Ref ---
   const latestStepRef = useRef(0);
 
-  // Determine current Theme Colors
   const T = THEMES?.[theme] || {
     bgApp: "bg-slate-950",
     textMain: "text-slate-200",
@@ -101,10 +93,14 @@ export default function App() {
     sidebarBg: "bg-slate-900/95",
   };
 
+  // Derived state for the current grid view
   const grid =
     history && history[step] ? history[step] : createEmptyGrid(rows, cols);
 
-  // --- 1. AUTH LISTENER ---
+  /**
+   * Effect: Monitors Firebase authentication state changes.
+   * Updates the user state and disables the loading indicator upon resolution.
+   */
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
@@ -113,27 +109,43 @@ export default function App() {
     return () => unsubscribe();
   }, []);
 
-  // --- 2. SYNC REFS (When not playing) ---
+  /**
+   * Effect: Synchronizes Refs with React State when simulation is paused.
+   * This ensures that when the simulation starts, it picks up exactly where the UI is.
+   */
   useEffect(() => {
     if (!isPlaying) {
       simulationState.current = { history, step };
-      // --- FIX 1b: Sync latestStepRef to handle Undo/Redo correctly ---
       latestStepRef.current = step;
     }
   }, [history, step, isPlaying]);
 
-  // --- 3. HELPER: Get Cell Safe ---
+  /**
+   * Safely retrieves a cell from the grid.
+   * * @param {Array<Array<Object>>} g - The grid array.
+   * @param {number} r - Row index.
+   * @param {number} c - Column index.
+   * @returns {Object|null} The cell object or null if out of bounds/empty.
+   */
   const getCell = (g, r, c) => {
     if (r < 0 || r >= g.length || c < 0 || c >= g[0].length) return null;
     return g[r][c];
   };
 
-  // --- 3a. RESET PENDING ON TOOL CHANGE ---
+  /**
+   * Effect: Resets multi-step tool states (like traffic light placement)
+   * when the user switches to a different tool.
+   */
   useEffect(() => {
     setPendingLightCoords(null);
   }, [selectedTool]);
 
-  // --- NEW: Handle Grid Resizing (Resolution Change) ---
+  /**
+   * Resizes the grid resolution based on a multiplier.
+   * * Preserves existing cells where possible.
+   * Resets simulation history to prevent index out-of-bounds errors on undo.
+   * * @param {number} multiplier - Scaling factor (e.g., 1.0, 1.5, 2.0).
+   */
   const handleGridResize = (multiplier) => {
     const BASE_ROWS = 16;
     const BASE_COLS = 25;
@@ -163,7 +175,10 @@ export default function App() {
     setPrePlayStep(null);
   };
 
-  // --- 4. LOGIC: Populate Cars ---
+  /**
+   * Randomly populates empty roads with cars.
+   * Used as a "Quick Start" feature for users.
+   */
   const handlePopulateCars = () => {
     setHistory((prev) => {
       const current = prev[step];
@@ -200,7 +215,14 @@ export default function App() {
     setStep((s) => s + 1);
   };
 
-  // --- 5. LOGIC: Simulation Loop ---
+  /**
+   * Effect: The Main Simulation Loop.
+   * * Runs continuously when `isPlaying` is true. It handles:
+   * 1. Spawning new cars from configured spawners.
+   * 2. Updating traffic light states (Green -> Yellow -> Red).
+   * 3. Moving cars based on flow direction, collisions, and traffic rules.
+   * 4. Updating the grid state (efficiently managing history).
+   */
   useEffect(() => {
     if (!isPlaying) return;
 
@@ -223,7 +245,11 @@ export default function App() {
       );
       const movedCars = new Set();
 
-      // --- HELPER: Safely check target compatibility (Handles Arrays) ---
+      /**
+       * Checks if a target cell accepts entry from a specific direction.
+       * @param {Object} tCell - Target cell data.
+       * @param {string} entryDir - Direction from which the car is entering.
+       */
       const isTargetCompatible = (tCell, entryDir) => {
         if (!tCell) return false;
         if (tCell.hasCar) return false;
@@ -233,7 +259,6 @@ export default function App() {
         const flow = tCell.flowDirection;
         if (flow) {
           if (Array.isArray(flow)) {
-            // If flow is an array, entry is valid if the direction is in the list
             return flow.includes(entryDir);
           } else if (typeof flow === "string") {
             if (flow.startsWith("turn_")) {
@@ -247,13 +272,12 @@ export default function App() {
         return true;
       };
 
-      // --- Individual Spawner Logic ---
+      // --- Spawner Logic ---
       for (let r = 0; r < rows; r++) {
         for (let c = 0; c < cols; c++) {
           const cell = newGrid[r][c];
           if (cell && cell.isSpawner && !cell.hasCar) {
-            // --- NEW FEATURE: Max Tick Check ---
-            // If a limit is set, and we passed it, skip this spawner
+            // Check against max spawn tick limit if set
             if (
               cell.maxSpawnTick !== undefined &&
               cell.maxSpawnTick !== null &&
@@ -268,7 +292,6 @@ export default function App() {
               let spawnDir = "right";
               const flow = cell.flowDirection;
 
-              // Handle Flow for Spawning
               if (flow) {
                 if (Array.isArray(flow) && flow.length > 0) {
                   spawnDir = flow[Math.floor(Math.random() * flow.length)];
@@ -284,7 +307,6 @@ export default function App() {
                 spawnDir = "right";
               }
 
-              // Randomize Bias based on Selection
               const possibleBiases = cell.spawnerTurnBiases || ["none"];
               const randomBias =
                 possibleBiases[
@@ -300,7 +322,7 @@ export default function App() {
         }
       }
 
-      // [Auto-Spawn Logic (Global)]
+      // --- Global Auto-Spawn Logic ---
       const spawnInterval = Math.max(3, 33 - spawnRate * 3);
       if (autoSpawnEnabled && globalTickRef.current % spawnInterval === 0) {
         let attempts = 0;
@@ -331,7 +353,7 @@ export default function App() {
         }
       }
 
-      // [Traffic Lights]
+      // --- Traffic Light Updates ---
       if (globalTickRef.current % 5 === 0) {
         for (let r = 0; r < rows; r++) {
           for (let c = 0; c < cols; c++) {
@@ -371,7 +393,7 @@ export default function App() {
         }
       }
 
-      // [Car Movement]
+      // --- Car Movement Logic ---
       for (let r = 0; r < rows; r++) {
         for (let c = 0; c < cols; c++) {
           let cell = newGrid[r][c];
@@ -388,14 +410,10 @@ export default function App() {
           const currentFlow = cell.flowDirection;
           const currentPriority = cell.flowPriority;
 
-          // Flow Override (Safe Array Check)
+          // Determine preferred direction based on flow restrictions
           if (currentFlow) {
             if (Array.isArray(currentFlow)) {
-              // If current direction is valid in array, keep it. If not, pick first?
-              // Actually, cars usually maintain direction unless forced.
-              // Prioritize existing direction if valid.
               if (!currentFlow.includes(direction)) {
-                // Force a valid direction from the array
                 if (currentFlow.length > 0) direction = currentFlow[0];
               }
             } else {
@@ -433,12 +451,12 @@ export default function App() {
 
           let isBlockedByLight = false;
 
-          // --- TRAFFIC LIGHT CHECK ---
           const isInsideIntersection =
             cell.type === "traffic_light" ||
             cell.type === "road_intersection" ||
             (cell.type && cell.type.includes("intersection"));
 
+          // Check for Stop Lines / Traffic Lights
           if (!isInsideIntersection) {
             if (cell.stopMarker) {
               const targetLight = getCell(
@@ -469,7 +487,6 @@ export default function App() {
             };
 
             const isValidMove = (dir) => {
-              // --- UPDATED: Safe Flow Check ---
               const flow = cell.flowDirection;
               if (flow) {
                 if (Array.isArray(flow)) {
@@ -515,6 +532,7 @@ export default function App() {
               if (isValidMove("down")) possibleMoves.push("down");
             }
 
+            // Handle forced turn flows
             if (
               cell.flowDirection &&
               typeof cell.flowDirection === "string" &&
@@ -527,6 +545,7 @@ export default function App() {
               }
             }
 
+            // Decide move
             if (possibleMoves.length > 0) {
               let chosen = null;
               const config = cell.carConfig || {};
@@ -561,6 +580,7 @@ export default function App() {
               nextC = nc;
               canMove = true;
             } else {
+              // Blocked
               canMove = false;
               newGrid[r][c] = {
                 ...cell,
@@ -610,6 +630,7 @@ export default function App() {
         }
       }
 
+      // --- History Management (Optimized for Playback) ---
       let nextHistory = [...curHistory.slice(0, curStep + 1), newGrid];
       if (nextHistory.length > 500) {
         nextHistory = nextHistory.slice(nextHistory.length - 500);
@@ -626,13 +647,18 @@ export default function App() {
     return () => clearInterval(interval);
   }, [isPlaying, rows, cols, autoSpawnEnabled, spawnRate]);
 
-  // --- 6. LOGIC: Update Grid ---
+  /**
+   * Primary grid modification handler.
+   * Updates the grid state based on the selected tool and target cell.
+   * Records changes in history for Undo/Redo.
+   * * @param {number} row - Row index of the click.
+   * @param {number} col - Column index of the click.
+   * @param {string} newItemOrType - Tool type or Item ID being applied.
+   */
   const updateGrid = useCallback(
     (row, col, newItemOrType) => {
       if (isPlaying) setIsPlaying(false);
 
-      // FIX: Use the Ref to get the most up-to-date step index
-      // (Variable is now defined at the top of the component)
       const currentStepIndex = latestStepRef.current;
       latestStepRef.current = currentStepIndex + 1;
 
@@ -649,7 +675,7 @@ export default function App() {
           return prev;
 
         if (newItemOrType === "eraser") {
-          // --- DELETION PRIORITY ---
+          // Eraser logic: Prioritize removing cars, then markers, then the cell itself
           if (updatedCell.hasCar) {
             updatedCell.hasCar = false;
             updatedCell.carConfig = undefined;
@@ -671,26 +697,19 @@ export default function App() {
             updatedCell = null;
             newGrid[row][col] = null;
           }
-        }
-
-        // --- FIX 2: IMPROVED CAR PLACEMENT LOGIC ---
-        else if (newItemOrType === "car") {
-          // Guard: Only allow placing cars on existing roads
+        } else if (newItemOrType === "car") {
+          // Car Placement: Enforce placement only on roads
           if (updatedCell.type && updatedCell.type.startsWith("road")) {
             let startDir = "right";
             const flow = updatedCell.flowDirection;
 
             if (flow) {
-              // Handle Array (Multi-Direction)
               if (Array.isArray(flow) && flow.length > 0) {
-                startDir = flow[0]; // Default to first allowed direction
-              }
-              // Handle String (Single Direction)
-              else if (typeof flow === "string" && !flow.startsWith("turn")) {
+                startDir = flow[0];
+              } else if (typeof flow === "string" && !flow.startsWith("turn")) {
                 startDir = flow;
               }
             } else {
-              // Auto-Detect Orientation if no flow is set
               if (updatedCell.type.includes("vertical")) {
                 startDir = "down";
               } else if (updatedCell.type.includes("horizontal")) {
@@ -702,9 +721,8 @@ export default function App() {
             updatedCell.carConfig = { speed: 1, turnBias: "none" };
             newGrid[row][col] = updatedCell;
           }
-        }
-        // -----------------------------
-        else if (newItemOrType === "traffic_light") {
+        } else if (newItemOrType === "traffic_light") {
+          // Two-step placement: 1. Place Light, 2. Place Stop Line
           if (!pendingLightCoords) {
             if (updatedCell.type && updatedCell.type.startsWith("road")) {
               updatedCell.hasTrafficLight = true;
@@ -721,6 +739,7 @@ export default function App() {
             newGrid[row][col] = updatedCell;
             setPendingLightCoords({ row, col });
           } else {
+            // Place Stop Line
             if (updatedCell.type && updatedCell.type.startsWith("road")) {
               const dRow = pendingLightCoords.row - row;
               const dCol = pendingLightCoords.col - col;
@@ -744,6 +763,7 @@ export default function App() {
           updatedCell.type = newItemOrType;
           updatedCell.lanePosition = 0;
           newGrid[row][col] = updatedCell;
+          // Auto-place adjacent lane
           if (col + 1 < cols) {
             const rightCell = newGrid[row][col + 1] || {
               type: null,
@@ -759,6 +779,7 @@ export default function App() {
           updatedCell.type = newItemOrType;
           updatedCell.lanePosition = 0;
           newGrid[row][col] = updatedCell;
+          // Auto-place adjacent lane
           if (row + 1 < rows) {
             const bottomCell = newGrid[row + 1][col] || {
               type: null,
@@ -822,7 +843,13 @@ export default function App() {
     ]
   );
 
-  // --- 7. LOGIC: Update Configs ---
+  /**
+   * Updates configuration for a Car Spawner cell.
+   * * @param {number} row - Cell row.
+   * @param {number} col - Cell column.
+   * @param {string} key - Configuration key (e.g., 'spawnInterval').
+   * @param {any} value - New value.
+   */
   const updateSpawnerConfig = (row, col, key, value) => {
     setHistory((prev) => {
       const current = prev[step];
@@ -835,7 +862,6 @@ export default function App() {
           newGrid[row][col].lastSpawnTick = globalTickRef.current;
           if (!newGrid[row][col].spawnInterval)
             newGrid[row][col].spawnInterval = 20;
-          // Default bias if not present
           if (!newGrid[row][col].spawnerTurnBiases)
             newGrid[row][col].spawnerTurnBiases = ["none"];
         }
@@ -845,6 +871,13 @@ export default function App() {
     setStep((s) => s + 1);
   };
 
+  /**
+   * Updates timing configuration for a Traffic Light.
+   * * @param {number} row
+   * @param {number} col
+   * @param {string} key - e.g., 'green', 'red', 'yellow'.
+   * @param {number} value - Duration in ticks.
+   */
   const updateTrafficLightConfig = (row, col, key, value) => {
     setHistory((prev) => {
       const current = prev[step];
@@ -869,7 +902,13 @@ export default function App() {
     setStep((s) => s + 1);
   };
 
-  // --- NEW: Toggle Light State Helper ---
+  /**
+   * Manually toggles the state of a traffic light.
+   * Used for interactive clicking on lights to force a change.
+   * * @param {number} row
+   * @param {number} col
+   * @param {string} newState - 'green', 'yellow', or 'red'.
+   */
   const updateTrafficLightState = (row, col, newState) => {
     setHistory((prev) => {
       const current = prev[step];
@@ -888,6 +927,13 @@ export default function App() {
     setStep((s) => s + 1);
   };
 
+  /**
+   * Updates the allowed flow direction for a road cell.
+   * Toggles direction in the array or sets to null (Any) if deselected.
+   * * @param {number} row
+   * @param {number} col
+   * @param {string|null} direction - 'up', 'down', 'left', 'right', or null.
+   */
   const updateRoadFlow = (row, col, direction) => {
     setHistory((prev) => {
       const current = prev[step];
@@ -898,13 +944,10 @@ export default function App() {
 
       if (cell && cell.type.startsWith("road")) {
         if (direction === null) {
-          // "Any" selected -> Clear restrictions
           cell.flowDirection = null;
         } else {
-          // Logic: Toggle direction in array
           let flows = [];
 
-          // Normalize existing value to array
           if (Array.isArray(cell.flowDirection)) {
             flows = [...cell.flowDirection];
           } else if (
@@ -914,14 +957,12 @@ export default function App() {
             flows = [cell.flowDirection];
           }
 
-          // Toggle
           if (flows.includes(direction)) {
             flows = flows.filter((d) => d !== direction);
           } else {
             flows.push(direction);
           }
 
-          // If empty array, revert to "Any" (null), otherwise save array
           cell.flowDirection = flows.length > 0 ? flows : null;
         }
         cell.flowPriority = null;
@@ -931,6 +972,12 @@ export default function App() {
     setStep((s) => s + 1);
   };
 
+  /**
+   * Dynamically adjusts the lane count of an existing multi-lane road.
+   * * @param {number} row
+   * @param {number} col
+   * @param {number} delta - +1 or -1 lane.
+   */
   const updateLaneCount = (row, col, delta) => {
     setHistory((prev) => {
       const current = prev[step];
@@ -989,6 +1036,13 @@ export default function App() {
     setStep((s) => s + 1);
   };
 
+  /**
+   * Updates configuration for a specific car.
+   * * @param {number} row
+   * @param {number} col
+   * @param {string} key - e.g., 'speed', 'turnBias'.
+   * @param {any} value
+   */
   const updateCarConfig = (row, col, key, value) => {
     setHistory((prev) => {
       const current = prev[step];
@@ -1006,6 +1060,13 @@ export default function App() {
     setStep((s) => s + 1);
   };
 
+  /**
+   * Applies a flow direction to a road network using a BFS flood fill algorithm.
+   * Detects turns (corners) and applies appropriate turn logic (e.g., up -> right).
+   * * @param {number} row - Starting row.
+   * @param {number} col - Starting column.
+   * @param {string|Array} direction - The flow direction to propagate.
+   */
   const floodFillFlow = (row, col, direction) => {
     setHistory((prev) => {
       const current = prev[step];
@@ -1015,7 +1076,7 @@ export default function App() {
       const startCell = newGrid[row][col];
       if (!startCell || !startCell.type.startsWith("road")) return prev;
 
-      // --- 1. Determine Initial Heading safely ---
+      // Determine Initial Heading safely
       let initialPropDir = null;
       if (typeof direction === "string") {
         initialPropDir = direction;
@@ -1037,7 +1098,7 @@ export default function App() {
         const currentCell = newGrid[r][c];
 
         if (currentCell && currentCell.type.startsWith("road")) {
-          // Lane Hopping Logic
+          // Lane Hopping Logic (Spread to adjacent lanes)
           if (currentCell.type.includes("multilane")) {
             const laneCount = currentCell.laneCount || 2;
             const currentPos = currentCell.lanePosition || 0;
@@ -1063,7 +1124,7 @@ export default function App() {
             }
           }
 
-          // Intersection Logic
+          // Intersection Logic (Stop propagation but check exits)
           if (currentCell.type === "road_intersection") {
             currentCell.flowDirection = null;
             currentCell.flowPriority = null;
@@ -1093,8 +1154,7 @@ export default function App() {
           let nextPropDir = currDir;
           let newFlow = direction;
 
-          // --- SMART PROPAGATION LOGIC (Unified) ---
-          // Unpack arrays if they only contain one item to allow string manipulation
+          // Smart Propagation Logic
           const singleCurr =
             Array.isArray(currDir) && currDir.length === 1
               ? currDir[0]
@@ -1111,7 +1171,7 @@ export default function App() {
           if (singleCurr && singleDir) {
             if (r !== row || c !== col) {
               const cellType = currentCell.type;
-              // Detect Turns based on single direction logic
+              // Detect Turns
               if (
                 cellType.includes("horizontal") &&
                 (singleCurr === "up" || singleCurr === "down")
@@ -1149,18 +1209,14 @@ export default function App() {
                 nextPropDir = singleDir.split("_")[2];
               }
             }
-          }
-          // --- FALLBACK: Complex Array Logic ---
-          else if (Array.isArray(direction)) {
+          } else if (Array.isArray(direction)) {
             newFlow = direction;
-            // Just propagate the first direction as a heuristic to keep moving
             if (direction.length > 0) nextPropDir = direction[0];
           }
 
           let dr = 0,
             dc = 0;
 
-          // Determine next coordinate based on nextPropDir (safely)
           const propDirString = Array.isArray(nextPropDir)
             ? nextPropDir[0]
             : nextPropDir;
@@ -1196,6 +1252,13 @@ export default function App() {
     setStep((s) => s + 1);
   };
 
+  /**
+   * Router for cell click actions.
+   * If 'Select' tool is active, updates selection state.
+   * Otherwise, calls updateGrid to modify the cell.
+   * * @param {number} r
+   * @param {number} c
+   */
   const handleCellAction = (r, c) => {
     if (selectedTool === "select") {
       setSelectedCell({ row: r, col: c });
@@ -1205,59 +1268,52 @@ export default function App() {
     }
   };
 
+  /**
+   * Loads a saved layout into the simulator.
+   * Resets simulation timers and clears temporary states.
+   * * @param {Array|string} loadedGrid - The grid data (or JSON string).
+   * @param {number} loadedRows
+   * @param {number} loadedCols
+   * @param {string} id - Database ID of the layout.
+   */
   const handleLoadLayout = (loadedGrid, loadedRows, loadedCols, id) => {
-    // 1. Parse the grid
     const parsedGrid =
       typeof loadedGrid === "string" ? JSON.parse(loadedGrid) : loadedGrid;
 
-    // 2. CLEANUP: Reset all ticks/timers in the grid to 0
+    // Reset ticks/timers in the grid to 0
     const cleanGrid = parsedGrid.map((row) =>
       row.map((cell) => {
         if (!cell) return null;
 
-        // Create a copy to modify
         const cleanCell = { ...cell };
 
-        // A. Reset Traffic Lights
         if (cleanCell.type === "traffic_light" || cleanCell.hasTrafficLight) {
           cleanCell.lightTimer = 0;
           cleanCell.timer = 0;
-          // Note: We keep the 'lightState' (color) so the intersection
-          // keeps its synchronized start phase (Red vs Green).
         }
 
-        // B. Reset Spawners (Random Generator)
         if (cleanCell.isSpawner) {
           cleanCell.lastSpawnTick = 0;
-          cleanCell.nextSpawnTick = null; // Setting to null triggers a fresh random calculation
+          cleanCell.nextSpawnTick = null;
         }
-
-        // C. Remove any existing cars (Optional, but cleaner for a fresh start)
-        // if (cleanCell.hasCar) {
-        //   cleanCell.hasCar = false;
-        //   cleanCell.carConfig = undefined;
-        //   cleanCell.movementProgress = 0;
-        // }
 
         return cleanCell;
       })
     );
 
-    // 3. Reset the Global Simulation Clock
     globalTickRef.current = 0;
 
-    // 4. Update State
     setRows(loadedRows);
     setCols(loadedCols);
     setGridMultiplier(loadedRows / 16);
-    setHistory([cleanGrid]); // Load the CLEAN grid, not the raw parsed one
+    setHistory([cleanGrid]);
     setStep(0);
     setIsPlaying(false);
     setPrePlayStep(null);
     setCurrentLayoutId(id);
   };
 
-  // Determine active palette
+  // Determine active palette based on mode
   let currentPaletteItems = MAIN_PALETTE_ITEMS;
   if (paletteMode === "road") currentPaletteItems = ROAD_PALETTE_ITEMS;
   if (paletteMode === "decoration")
@@ -1268,7 +1324,7 @@ export default function App() {
     ? grid && grid[selectedCell.row] && grid[selectedCell.row][selectedCell.col]
     : null;
 
-  // --- RENDER ---
+  // Render Authentication Loading State
   if (authLoading) {
     return (
       <div className="flex h-screen w-screen bg-slate-950 items-center justify-center font-sans text-slate-400 animate-pulse">
@@ -1277,6 +1333,7 @@ export default function App() {
     );
   }
 
+  // Render Login Screen if not authenticated
   if (!user) {
     return <LoginScreen />;
   }
@@ -1285,7 +1342,7 @@ export default function App() {
     <div
       className={`flex h-screen w-screen font-sans overflow-hidden transition-colors duration-300 ${T.bgApp} ${T.textMain}`}
     >
-      {/* --- Modals --- */}
+      {/* Modals */}
       {activeModal === "save" && (
         <SaveLoadModal
           mode="save"
@@ -1325,14 +1382,14 @@ export default function App() {
         />
       )}
 
-      {/* --- PENDING TOOLTIP (New) --- */}
+      {/* Pending Action Tooltip */}
       {pendingLightCoords && (
         <div className="absolute top-24 left-1/2 -translate-x-1/2 z-50 bg-yellow-500 text-black px-4 py-2 rounded-full font-bold text-sm shadow-lg animate-bounce">
           👇 Select a road for the Stop Line
         </div>
       )}
 
-      {/* --- Sidebar Mobile Toggle --- */}
+      {/* Sidebar Toggle (Mobile) */}
       <div className="absolute top-4 left-4 z-50">
         <button
           onClick={() => setIsSidebarOpen(true)}
@@ -1355,7 +1412,7 @@ export default function App() {
         />
       )}
 
-      {/* --- Main Sidebar --- */}
+      {/* Main Sidebar */}
       <div
         className={`flex-shrink-0 h-full backdrop-blur-md shadow-2xl z-40 overflow-hidden transition-all duration-300 ease-in-out border-r flex flex-col ${
           isSidebarOpen ? "w-64" : "w-0 border-none"
@@ -1398,7 +1455,6 @@ export default function App() {
                   "U"
                 )}
               </button>
-              {/* SIDEBAR CLOSE BUTTON - FIXED */}
               <button
                 onClick={() => setIsSidebarOpen(false)}
                 className={`p-1.5 rounded-lg transition-colors border border-transparent ${
@@ -1414,7 +1470,7 @@ export default function App() {
           </div>
 
           <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
-            {/* ... (Keep Tool Settings / Auto Spawn / Properties Panels) ... */}
+            {/* Tool Settings (Lane Count) */}
             {!selectedCell &&
               selectedTool &&
               selectedTool.includes("multilane") && (
@@ -1463,7 +1519,7 @@ export default function App() {
                 </div>
               )}
 
-            {/* --- PROPERTIES PANEL: Selected Multi-Lane Road --- */}
+            {/* Properties Panel: Selected Multi-Lane Road */}
             {selectedCell &&
               selectedCellData &&
               selectedCellData.type &&
@@ -1523,7 +1579,7 @@ export default function App() {
                 </div>
               )}
 
-            {/* ... (Keep Traffic Light / Car Config / Flow Config / Auto Spawn) ... */}
+            {/* Global Auto-Spawn Settings */}
             {!selectedCell && autoSpawnEnabled && (
               <div
                 className={`mb-6 p-4 rounded-xl border-l-4 border-fuchsia-500 shadow-md animate-fadeIn ${T.panelBg} ${T.panelBorder} border`}
@@ -1563,9 +1619,8 @@ export default function App() {
               </div>
             )}
 
-            {/* --- PROPERTIES PANEL: Traffic Light (Includes Linked Signals) --- */}
+            {/* Properties Panel: Traffic Light */}
             {(() => {
-              // 1. Determine which light to show (Selected directly OR Linked via Stop Line)
               let activeLight = null;
               let activeCoords = null;
               let isLinked = false;
@@ -1575,11 +1630,9 @@ export default function App() {
                   selectedCellData.type === "traffic_light" ||
                   selectedCellData.hasTrafficLight
                 ) {
-                  // Case A: Directly selected a light
                   activeLight = selectedCellData;
                   activeCoords = { r: selectedCell.row, c: selectedCell.col };
                 } else if (selectedCellData.stopMarker) {
-                  // Case B: Selected a stop line -> Fetch the linked light
                   const { r, c } = selectedCellData.stopMarker;
                   const target = grid[r] && grid[r][c];
                   if (
@@ -1593,7 +1646,6 @@ export default function App() {
                 }
               }
 
-              // If no valid light found, don't render panel
               if (!activeLight) return null;
 
               return (
@@ -1614,7 +1666,6 @@ export default function App() {
                     </button>
                   </div>
 
-                  {/* --- Current Status (INTERACTIVE BUTTON + TIMER) --- */}
                   <div className="mb-4 flex items-center justify-between p-2 rounded-lg bg-black/10 border border-black/5">
                     <span className={`text-xs font-bold ${T.textDim}`}>
                       Current State:
@@ -1660,7 +1711,6 @@ export default function App() {
                         {activeLight.lightState || activeLight.state || "GREEN"}
                       </button>
 
-                      {/* --- RE-ADDED: Timer Display --- */}
                       <div className="ml-4 whitespace-nowrap text-[10px] font-mono font-bold opacity-70 text-slate-400">
                         ⏱{" "}
                         {activeLight.lightTimer !== undefined
@@ -1683,7 +1733,6 @@ export default function App() {
                     </div>
                   </div>
 
-                  {/* --- Configuration Inputs --- */}
                   <div className="space-y-3">
                     <div className="grid grid-cols-3 gap-2">
                       {["green", "yellow", "red"].map((color) => (
@@ -1703,7 +1752,7 @@ export default function App() {
                             }
                             onChange={(e) =>
                               updateTrafficLightConfig(
-                                activeCoords.r, // Use the LIGHT's coordinates, not the selected cell's
+                                activeCoords.r,
                                 activeCoords.c,
                                 color,
                                 e.target.value
@@ -1723,7 +1772,7 @@ export default function App() {
               );
             })()}
 
-            {/* ... (Car Settings Panel) ... */}
+            {/* Properties Panel: Car Config */}
             {selectedCell && selectedCellData && selectedCellData.hasCar && (
               <div
                 className={`mb-6 p-4 rounded-xl border-l-4 border-orange-500 shadow-md animate-fadeIn ${T.panelBg} ${T.panelBorder} border`}
@@ -1806,7 +1855,7 @@ export default function App() {
               </div>
             )}
 
-            {/* ... (Flow Settings Panel) ... */}
+            {/* Properties Panel: Road Flow & Spawner */}
             {selectedCell &&
               selectedCellData &&
               selectedCellData.type &&
@@ -1884,7 +1933,7 @@ export default function App() {
                       })}
                     </div>
 
-                    {/* --- NEW: SPAWNER CONFIG SECTION --- */}
+                    {/* Spawner Toggle */}
                     <div
                       className={`pt-3 border-t mt-1 ${
                         theme === "light"
@@ -1925,7 +1974,6 @@ export default function App() {
 
                       {selectedCellData.isSpawner && (
                         <div className="space-y-3">
-                          {/* Numerical Value Display */}
                           <div
                             className={`flex justify-between items-center text-xs px-1 ${T.textDim}`}
                           >
@@ -1941,7 +1989,6 @@ export default function App() {
                             </span>
                           </div>
 
-                          {/* Slider */}
                           <div className="flex items-center gap-2 mb-2">
                             <span className={`text-[10px] ${T.textDim}`}>
                               Fast
@@ -1971,7 +2018,6 @@ export default function App() {
                             </span>
                           </div>
 
-                          {/* --- NEW INPUT: Max Tick Limit --- */}
                           <div className="flex justify-between items-center gap-2 px-1">
                             <label className={`text-[10px] ${T.textDim}`}>
                               Stop Gen. at Tick:
@@ -2003,7 +2049,6 @@ export default function App() {
                             />
                           </div>
 
-                          {/* --- NEW: Multi-Select Turn Priority Buttons --- */}
                           <div className="flex flex-col gap-1">
                             <span className={`text-[10px] ${T.textDim}`}>
                               Random Turn Bias
@@ -2022,14 +2067,12 @@ export default function App() {
                                     onClick={() => {
                                       let newBiases;
                                       if (isSelected) {
-                                        // Deselect (prevent empty array)
                                         newBiases = currentBiases.filter(
                                           (b) => b !== bias
                                         );
                                         if (newBiases.length === 0)
                                           newBiases = [bias];
                                       } else {
-                                        // Select
                                         newBiases = [...currentBiases, bias];
                                       }
                                       updateSpawnerConfig(
@@ -2089,7 +2132,7 @@ export default function App() {
                 </div>
               )}
 
-            {/* --- Helper Text --- */}
+            {/* Empty Selection Helper */}
             {!selectedCell && (
               <div
                 className={`mb-6 p-4 border border-dashed rounded-xl text-center ${
@@ -2103,7 +2146,7 @@ export default function App() {
               </div>
             )}
 
-            {/* --- Tools Palette (Updated to pass theme) --- */}
+            {/* Tool Selection Grid */}
             <div className="mb-8">
               <h2
                 className={`text-xs font-bold uppercase tracking-wider mb-3 ml-1 ${T.textDim}`}
@@ -2115,7 +2158,6 @@ export default function App() {
                   <PaletteItem
                     key={item.type}
                     item={item}
-                    // ADDED: theme prop passed down
                     theme={theme}
                     isSelected={
                       selectedTool === item.type ||
@@ -2182,11 +2224,11 @@ export default function App() {
         </div>
       </div>
 
-      {/* --- Main Stage --- */}
+      {/* Main Simulation Stage */}
       <div
         className={`flex-1 relative overflow-hidden flex flex-col min-w-0 ${T.bgApp}`}
       >
-        {/* Floating Controls: Bottom Right (Updated colors for visibility) */}
+        {/* Floating Controls: Bottom Right */}
         <div
           className={`absolute bottom-8 right-8 z-50 flex items-center gap-2 p-2 backdrop-blur-md border rounded-2xl shadow-2xl ${
             theme === "light"
@@ -2306,12 +2348,10 @@ export default function App() {
             <button
               onClick={() => {
                 if (prePlayStep !== null) {
-                  // --- LOGIC: RESET TRAFFIC LIGHTS ---
-                  // 1. Get the grid from the restore point
+                  // Logic: Reset Grid to Pre-Play State
                   const originalGrid = history[prePlayStep];
 
-                  // 2. Create a clean copy.
-                  // Reset timer to 0, but KEEP the start state (color) from originalGrid.
+                  // Reset ephemeral states (timers)
                   const resetGrid = originalGrid.map((row) =>
                     row.map((cell) => {
                       if (!cell) return null;
@@ -2321,8 +2361,6 @@ export default function App() {
                       ) {
                         return {
                           ...cell,
-                          // Removed forced "green" state.
-                          // It now keeps the state it had when simulation started.
                           lightTimer: 0,
                           timer: 0,
                         };
@@ -2331,7 +2369,6 @@ export default function App() {
                     })
                   );
 
-                  // 3. Update history with the reset grid and jump to it
                   setHistory((prev) => {
                     const newHist = [...prev];
                     newHist[prePlayStep] = resetGrid;
@@ -2353,9 +2390,8 @@ export default function App() {
           </div>
         </div>
 
-        {/* Grid Canvas Container with Scaling */}
+        {/* Grid Canvas */}
         <div className="flex-1 flex items-center justify-center p-8 overflow-auto">
-          {/* CHANGED: Removed scale transform, wrapper now just holds the Grid */}
           <div className="relative">
             <Grid
               grid={grid}
