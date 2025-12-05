@@ -174,8 +174,24 @@ const renderBuilding = () => {
 };
 
 export const renderDirectionArrow = (direction) => {
+  // --- BUG FIX: Handle Arrays (Recursive) ---
+  if (Array.isArray(direction)) {
+    return (
+      <>
+        {direction.map((d, i) => (
+          <React.Fragment key={i}>{renderDirectionArrow(d)}</React.Fragment>
+        ))}
+      </>
+    );
+  }
+
   let content = null;
   let rot = 0;
+
+  // Safety check: ensure direction is a string
+  if (!direction || typeof direction !== "string") {
+    return null;
+  }
 
   if (
     direction === "up" ||
@@ -192,7 +208,7 @@ export const renderDirectionArrow = (direction) => {
         <rect x="-4" y="5" width="8" height="15" fill="white" />
       </>
     );
-  } else if (direction && direction.startsWith("turn_")) {
+  } else if (direction.startsWith("turn_")) {
     const parts = direction.split("_");
     const entry = parts[1];
     const exit = parts[2];

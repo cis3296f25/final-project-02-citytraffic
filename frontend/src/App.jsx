@@ -88,6 +88,9 @@ export default function App() {
     step: 0,
   });
 
+  // --- FIX 1: Defined missing Ref ---
+  const latestStepRef = useRef(0);
+
   // Determine current Theme Colors
   const T = THEMES?.[theme] || {
     bgApp: "bg-slate-950",
@@ -114,6 +117,8 @@ export default function App() {
   useEffect(() => {
     if (!isPlaying) {
       simulationState.current = { history, step };
+      // --- FIX 1b: Sync latestStepRef to handle Undo/Redo correctly ---
+      latestStepRef.current = step;
     }
   }, [history, step, isPlaying]);
 
@@ -218,18 +223,25 @@ export default function App() {
       );
       const movedCars = new Set();
 
+      // --- HELPER: Safely check target compatibility (Handles Arrays) ---
       const isTargetCompatible = (tCell, entryDir) => {
         if (!tCell) return false;
         if (tCell.hasCar) return false;
         if (tCell.type === "traffic_light") return false;
         if (!tCell.type.startsWith("road")) return false;
 
-        if (tCell.flowDirection) {
-          if (tCell.flowDirection.startsWith("turn_")) {
-            const entry = tCell.flowDirection.split("_")[1];
-            return entryDir === entry;
-          } else {
-            return tCell.flowDirection === entryDir;
+        const flow = tCell.flowDirection;
+        if (flow) {
+          if (Array.isArray(flow)) {
+            // If flow is an array, entry is valid if the direction is in the list
+            return flow.includes(entryDir);
+          } else if (typeof flow === "string") {
+            if (flow.startsWith("turn_")) {
+              const entry = flow.split("_")[1];
+              return entryDir === entry;
+            } else {
+              return flow === entryDir;
+            }
           }
         }
         return true;
@@ -240,23 +252,39 @@ export default function App() {
         for (let c = 0; c < cols; c++) {
           const cell = newGrid[r][c];
           if (cell && cell.isSpawner && !cell.hasCar) {
+            // --- NEW FEATURE: Max Tick Check ---
+            // If a limit is set, and we passed it, skip this spawner
+            if (
+              cell.maxSpawnTick !== undefined &&
+              cell.maxSpawnTick !== null &&
+              globalTickRef.current > cell.maxSpawnTick
+            ) {
+              continue;
+            }
             const interval = cell.spawnInterval || 20;
             const lastTick = cell.lastSpawnTick || 0;
 
             if (globalTickRef.current - lastTick >= interval) {
               let spawnDir = "right";
-              if (
-                cell.flowDirection &&
-                !cell.flowDirection.startsWith("turn")
-              ) {
-                spawnDir = cell.flowDirection;
+              const flow = cell.flowDirection;
+
+              // Handle Flow for Spawning
+              if (flow) {
+                if (Array.isArray(flow) && flow.length > 0) {
+                  spawnDir = flow[Math.floor(Math.random() * flow.length)];
+                } else if (
+                  typeof flow === "string" &&
+                  !flow.startsWith("turn")
+                ) {
+                  spawnDir = flow;
+                }
               } else if (cell.type.includes("vertical")) {
                 spawnDir = "down";
               } else if (cell.type.includes("horizontal")) {
                 spawnDir = "right";
               }
 
-              // --- Randomize Bias based on Selection ---
+              // Randomize Bias based on Selection
               const possibleBiases = cell.spawnerTurnBiases || ["none"];
               const randomBias =
                 possibleBiases[
@@ -283,9 +311,13 @@ export default function App() {
           const cell = newGrid[r][c];
           if (cell && cell.type.startsWith("road") && !cell.hasCar) {
             let spawnDir = "right";
-            if (cell.flowDirection && !cell.flowDirection.startsWith("turn"))
-              spawnDir = cell.flowDirection;
-            else if (cell.type.includes("vertical"))
+            const flow = cell.flowDirection;
+
+            if (flow) {
+              if (Array.isArray(flow) && flow.length > 0) spawnDir = flow[0];
+              else if (typeof flow === "string" && !flow.startsWith("turn"))
+                spawnDir = flow;
+            } else if (cell.type.includes("vertical"))
               spawnDir = Math.random() > 0.5 ? "up" : "down";
             else if (cell.type.includes("horizontal"))
               spawnDir = Math.random() > 0.5 ? "left" : "right";
@@ -356,16 +388,26 @@ export default function App() {
           const currentFlow = cell.flowDirection;
           const currentPriority = cell.flowPriority;
 
-          // Flow Override
+          // Flow Override (Safe Array Check)
           if (currentFlow) {
-            if (currentFlow === "left" && direction === "right")
-              direction = "left";
-            else if (currentFlow === "right" && direction === "left")
-              direction = "right";
-            else if (currentFlow === "up" && direction === "down")
-              direction = "up";
-            else if (currentFlow === "down" && direction === "up")
-              direction = "down";
+            if (Array.isArray(currentFlow)) {
+              // If current direction is valid in array, keep it. If not, pick first?
+              // Actually, cars usually maintain direction unless forced.
+              // Prioritize existing direction if valid.
+              if (!currentFlow.includes(direction)) {
+                // Force a valid direction from the array
+                if (currentFlow.length > 0) direction = currentFlow[0];
+              }
+            } else {
+              if (currentFlow === "left" && direction === "right")
+                direction = "left";
+              else if (currentFlow === "right" && direction === "left")
+                direction = "right";
+              else if (currentFlow === "up" && direction === "down")
+                direction = "up";
+              else if (currentFlow === "down" && direction === "up")
+                direction = "down";
+            }
           } else if (currentPriority) {
             let pr = r,
               pc = c;
@@ -392,15 +434,12 @@ export default function App() {
           let isBlockedByLight = false;
 
           // --- TRAFFIC LIGHT CHECK ---
-
-          // 1. Skip checks if already inside an intersection (Must clear the box)
           const isInsideIntersection =
             cell.type === "traffic_light" ||
             cell.type === "road_intersection" ||
             (cell.type && cell.type.includes("intersection"));
 
           if (!isInsideIntersection) {
-            // A. Check Specific Stop Marker (If linked)
             if (cell.stopMarker) {
               const targetLight = getCell(
                 newGrid,
@@ -430,12 +469,16 @@ export default function App() {
             };
 
             const isValidMove = (dir) => {
-              if (
-                cell.flowDirection &&
-                cell.flowDirection !== dir &&
-                !cell.flowDirection.startsWith("turn_")
-              )
-                return false;
+              // --- UPDATED: Safe Flow Check ---
+              const flow = cell.flowDirection;
+              if (flow) {
+                if (Array.isArray(flow)) {
+                  if (!flow.includes(dir)) return false;
+                } else {
+                  if (flow !== dir && !flow.startsWith("turn_")) return false;
+                }
+              }
+
               const { nr, nc } = getCoords(dir);
               const isOffScreen = nr < 0 || nr >= rows || nc < 0 || nc >= cols;
               if (isOffScreen) return true;
@@ -472,7 +515,11 @@ export default function App() {
               if (isValidMove("down")) possibleMoves.push("down");
             }
 
-            if (cell.flowDirection && cell.flowDirection.startsWith("turn_")) {
+            if (
+              cell.flowDirection &&
+              typeof cell.flowDirection === "string" &&
+              cell.flowDirection.startsWith("turn_")
+            ) {
               const exit = cell.flowDirection.split("_")[2];
               if (isValidMove(exit)) {
                 possibleMoves.length = 0;
@@ -523,16 +570,13 @@ export default function App() {
             }
 
             if (canMove) {
-              // 1. Clone config
               let movingConfig = cell.carConfig ? { ...cell.carConfig } : {};
 
-              // --- LOGIC: Reset Priority After Turn ---
               if (
                 isInsideIntersection &&
                 movingConfig.turnBias &&
                 movingConfig.turnBias !== "none"
               ) {
-                // If the car is changing direction (Turning)
                 if (nextDir !== direction) {
                   movingConfig.turnBias = "none";
                 }
@@ -561,7 +605,6 @@ export default function App() {
               }
             }
           } else {
-            // STOPPED BY LIGHT: Clamp to line
             newGrid[r][c] = { ...cell, movementProgress: MOVE_THRESHOLD };
           }
         }
@@ -588,62 +631,80 @@ export default function App() {
     (row, col, newItemOrType) => {
       if (isPlaying) setIsPlaying(false);
 
+      // FIX: Use the Ref to get the most up-to-date step index
+      // (Variable is now defined at the top of the component)
+      const currentStepIndex = latestStepRef.current;
+      latestStepRef.current = currentStepIndex + 1;
+
       setHistory((prev) => {
-        const current = prev[step];
+        const safeStep = Math.min(currentStepIndex, prev.length - 1);
+        const current = prev[safeStep];
+
         const newGrid = current.map((r) =>
           r.map((cell) => (cell ? { ...cell } : null))
         );
         let updatedCell = newGrid[row][col] || { type: null, hasCar: false };
 
-        if (selectedTool === "select") return prev;
+        if (selectedTool === "select" && newItemOrType !== "eraser")
+          return prev;
 
         if (newItemOrType === "eraser") {
           // --- DELETION PRIORITY ---
-          // 1. Remove Car
           if (updatedCell.hasCar) {
             updatedCell.hasCar = false;
             updatedCell.carConfig = undefined;
             newGrid[row][col] = updatedCell;
-          }
-          // 2. Remove Stop Line / Marker
-          else if (updatedCell.stopMarker) {
+          } else if (updatedCell.stopMarker) {
             delete updatedCell.stopMarker;
             newGrid[row][col] = updatedCell;
-          }
-          // 3. Remove Overlay Traffic Light
-          else if (updatedCell.hasTrafficLight) {
+          } else if (updatedCell.hasTrafficLight) {
             updatedCell.hasTrafficLight = false;
             updatedCell.lightState = undefined;
             updatedCell.lightConfig = undefined;
             updatedCell.lightTimer = undefined;
             newGrid[row][col] = updatedCell;
-          }
-          // 4. Remove Base Traffic Light (Legacy)
-          else if (updatedCell.type === "traffic_light") {
+          } else if (updatedCell.type === "traffic_light") {
             updatedCell.type = "road_intersection";
             updatedCell.hasTrafficLight = false;
             newGrid[row][col] = updatedCell;
-          }
-          // 5. Remove Road/Building
-          else {
+          } else {
             updatedCell = null;
             newGrid[row][col] = null;
           }
-        } else if (newItemOrType === "car") {
-          let startDir = "right";
-          if (
-            updatedCell.flowDirection &&
-            !updatedCell.flowDirection.startsWith("turn")
-          ) {
-            startDir = updatedCell.flowDirection;
-          }
-          updatedCell.hasCar = startDir;
-          updatedCell.carConfig = { speed: 1, turnBias: "none" };
-          newGrid[row][col] = updatedCell;
         }
-        // --- TRAFFIC LIGHT (Two-Step Placement) ---
+
+        // --- FIX 2: IMPROVED CAR PLACEMENT LOGIC ---
+        else if (newItemOrType === "car") {
+          // Guard: Only allow placing cars on existing roads
+          if (updatedCell.type && updatedCell.type.startsWith("road")) {
+            let startDir = "right";
+            const flow = updatedCell.flowDirection;
+
+            if (flow) {
+              // Handle Array (Multi-Direction)
+              if (Array.isArray(flow) && flow.length > 0) {
+                startDir = flow[0]; // Default to first allowed direction
+              }
+              // Handle String (Single Direction)
+              else if (typeof flow === "string" && !flow.startsWith("turn")) {
+                startDir = flow;
+              }
+            } else {
+              // Auto-Detect Orientation if no flow is set
+              if (updatedCell.type.includes("vertical")) {
+                startDir = "down";
+              } else if (updatedCell.type.includes("horizontal")) {
+                startDir = "right";
+              }
+            }
+
+            updatedCell.hasCar = startDir;
+            updatedCell.carConfig = { speed: 1, turnBias: "none" };
+            newGrid[row][col] = updatedCell;
+          }
+        }
+        // -----------------------------
         else if (newItemOrType === "traffic_light") {
-          // STEP 1: Place Light
           if (!pendingLightCoords) {
             if (updatedCell.type && updatedCell.type.startsWith("road")) {
               updatedCell.hasTrafficLight = true;
@@ -659,14 +720,11 @@ export default function App() {
             }
             newGrid[row][col] = updatedCell;
             setPendingLightCoords({ row, col });
-          }
-          // STEP 2: Place Stop Marker
-          else {
+          } else {
             if (updatedCell.type && updatedCell.type.startsWith("road")) {
-              // Calculate Direction
               const dRow = pendingLightCoords.row - row;
               const dCol = pendingLightCoords.col - col;
-              let side = "bottom"; // fallback
+              let side = "bottom";
 
               if (dRow < 0) side = "top";
               else if (dRow > 0) side = "bottom";
@@ -747,8 +805,8 @@ export default function App() {
           newGrid[row][col] = updatedCell;
         }
 
-        const newHist = [...prev.slice(0, step + 1), newGrid];
-        simulationState.current = { history: newHist, step: step + 1 };
+        const newHist = [...prev.slice(0, safeStep + 1), newGrid];
+        simulationState.current = { history: newHist, step: safeStep + 1 };
         return newHist;
       });
       setStep((s) => s + 1);
@@ -836,9 +894,37 @@ export default function App() {
       const newGrid = current.map((r) =>
         r.map((cell) => (cell ? { ...cell } : null))
       );
-      if (newGrid[row][col] && newGrid[row][col].type.startsWith("road")) {
-        newGrid[row][col].flowDirection = direction;
-        newGrid[row][col].flowPriority = null;
+      const cell = newGrid[row][col];
+
+      if (cell && cell.type.startsWith("road")) {
+        if (direction === null) {
+          // "Any" selected -> Clear restrictions
+          cell.flowDirection = null;
+        } else {
+          // Logic: Toggle direction in array
+          let flows = [];
+
+          // Normalize existing value to array
+          if (Array.isArray(cell.flowDirection)) {
+            flows = [...cell.flowDirection];
+          } else if (
+            cell.flowDirection &&
+            typeof cell.flowDirection === "string"
+          ) {
+            flows = [cell.flowDirection];
+          }
+
+          // Toggle
+          if (flows.includes(direction)) {
+            flows = flows.filter((d) => d !== direction);
+          } else {
+            flows.push(direction);
+          }
+
+          // If empty array, revert to "Any" (null), otherwise save array
+          cell.flowDirection = flows.length > 0 ? flows : null;
+        }
+        cell.flowPriority = null;
       }
       return [...prev.slice(0, step + 1), newGrid];
     });
@@ -929,9 +1015,15 @@ export default function App() {
       const startCell = newGrid[row][col];
       if (!startCell || !startCell.type.startsWith("road")) return prev;
 
-      let initialPropDir = direction;
-      if (direction && direction.startsWith("turn_")) {
-        initialPropDir = direction.split("_")[2];
+      // --- 1. Determine Initial Heading safely ---
+      let initialPropDir = null;
+      if (typeof direction === "string") {
+        initialPropDir = direction;
+        if (direction.startsWith("turn_")) {
+          initialPropDir = direction.split("_")[2];
+        }
+      } else if (Array.isArray(direction) && direction.length > 0) {
+        initialPropDir = direction[0];
       }
 
       const queue = [[row, col, initialPropDir]];
@@ -945,7 +1037,7 @@ export default function App() {
         const currentCell = newGrid[r][c];
 
         if (currentCell && currentCell.type.startsWith("road")) {
-          // Lane Hopping
+          // Lane Hopping Logic
           if (currentCell.type.includes("multilane")) {
             const laneCount = currentCell.laneCount || 2;
             const currentPos = currentCell.lanePosition || 0;
@@ -971,6 +1063,7 @@ export default function App() {
             }
           }
 
+          // Intersection Logic
           if (currentCell.type === "road_intersection") {
             currentCell.flowDirection = null;
             currentCell.flowPriority = null;
@@ -998,50 +1091,86 @@ export default function App() {
           }
 
           let nextPropDir = currDir;
-          let newFlow = currDir;
+          let newFlow = direction;
 
-          if (r !== row || c !== col) {
-            const cellType = currentCell.type;
-            if (
-              cellType.includes("horizontal") &&
-              (currDir === "up" || currDir === "down")
-            ) {
-              const leftN = getCell(newGrid, r, c - 1);
-              const rightN = getCell(newGrid, r, c + 1);
-              if (leftN && leftN.type.startsWith("road")) {
-                nextPropDir = "left";
-                newFlow = `turn_${currDir}_left`;
-              } else if (rightN && rightN.type.startsWith("road")) {
-                nextPropDir = "right";
-                newFlow = `turn_${currDir}_right`;
+          // --- SMART PROPAGATION LOGIC (Unified) ---
+          // Unpack arrays if they only contain one item to allow string manipulation
+          const singleCurr =
+            Array.isArray(currDir) && currDir.length === 1
+              ? currDir[0]
+              : typeof currDir === "string"
+              ? currDir
+              : null;
+          const singleDir =
+            Array.isArray(direction) && direction.length === 1
+              ? direction[0]
+              : typeof direction === "string"
+              ? direction
+              : null;
+
+          if (singleCurr && singleDir) {
+            if (r !== row || c !== col) {
+              const cellType = currentCell.type;
+              // Detect Turns based on single direction logic
+              if (
+                cellType.includes("horizontal") &&
+                (singleCurr === "up" || singleCurr === "down")
+              ) {
+                const leftN = getCell(newGrid, r, c - 1);
+                const rightN = getCell(newGrid, r, c + 1);
+                if (leftN && leftN.type.startsWith("road")) {
+                  nextPropDir = "left";
+                  newFlow = `turn_${singleCurr}_left`;
+                } else if (rightN && rightN.type.startsWith("road")) {
+                  nextPropDir = "right";
+                  newFlow = `turn_${singleCurr}_right`;
+                }
+              } else if (
+                cellType.includes("vertical") &&
+                (singleCurr === "left" || singleCurr === "right")
+              ) {
+                const upN = getCell(newGrid, r - 1, c);
+                const downN = getCell(newGrid, r + 1, c);
+                if (upN && upN.type.startsWith("road")) {
+                  nextPropDir = "up";
+                  newFlow = `turn_${singleCurr}_up`;
+                } else if (downN && downN.type.startsWith("road")) {
+                  nextPropDir = "down";
+                  newFlow = `turn_${singleCurr}_down`;
+                }
+              } else {
+                newFlow = singleCurr; // Continue straight
+                nextPropDir = singleCurr;
               }
-            } else if (
-              cellType.includes("vertical") &&
-              (currDir === "left" || currDir === "right")
-            ) {
-              const upN = getCell(newGrid, r - 1, c);
-              const downN = getCell(newGrid, r + 1, c);
-              if (upN && upN.type.startsWith("road")) {
-                nextPropDir = "up";
-                newFlow = `turn_${currDir}_up`;
-              } else if (downN && downN.type.startsWith("road")) {
-                nextPropDir = "down";
-                newFlow = `turn_${currDir}_down`;
+            } else {
+              // Starting Cell
+              newFlow = direction;
+              if (singleDir.startsWith("turn_")) {
+                nextPropDir = singleDir.split("_")[2];
               }
             }
-          } else {
-            newFlow = direction || null;
-            if (direction && direction.startsWith("turn_")) {
-              nextPropDir = direction.split("_")[2];
-            }
+          }
+          // --- FALLBACK: Complex Array Logic ---
+          else if (Array.isArray(direction)) {
+            newFlow = direction;
+            // Just propagate the first direction as a heuristic to keep moving
+            if (direction.length > 0) nextPropDir = direction[0];
           }
 
           let dr = 0,
             dc = 0;
-          if (nextPropDir === "up") dr = -1;
-          if (nextPropDir === "down") dr = 1;
-          if (nextPropDir === "left") dc = -1;
-          if (nextPropDir === "right") dc = 1;
+
+          // Determine next coordinate based on nextPropDir (safely)
+          const propDirString = Array.isArray(nextPropDir)
+            ? nextPropDir[0]
+            : nextPropDir;
+
+          if (typeof propDirString === "string") {
+            if (propDirString === "up") dr = -1;
+            if (propDirString === "down") dr = 1;
+            if (propDirString === "left") dc = -1;
+            if (propDirString === "right") dc = 1;
+          }
 
           const nr = r + dr;
           const nc = c + dc;
@@ -1053,13 +1182,12 @@ export default function App() {
             newGrid[nr][nc] &&
             newGrid[nr][nc].type.startsWith("road");
 
-          if (isNextCellValid) {
-            currentCell.flowDirection = newFlow;
-            currentCell.flowPriority = null;
+          // Apply Flow
+          currentCell.flowDirection = newFlow;
+          currentCell.flowPriority = null;
+
+          if (isNextCellValid && (dr !== 0 || dc !== 0)) {
             queue.push([nr, nc, nextPropDir]);
-          } else {
-            currentCell.flowDirection = null;
-            currentCell.flowPriority = newFlow; // Set Priority at end of line
           }
         }
       }
@@ -1078,12 +1206,51 @@ export default function App() {
   };
 
   const handleLoadLayout = (loadedGrid, loadedRows, loadedCols, id) => {
+    // 1. Parse the grid
     const parsedGrid =
       typeof loadedGrid === "string" ? JSON.parse(loadedGrid) : loadedGrid;
+
+    // 2. CLEANUP: Reset all ticks/timers in the grid to 0
+    const cleanGrid = parsedGrid.map((row) =>
+      row.map((cell) => {
+        if (!cell) return null;
+
+        // Create a copy to modify
+        const cleanCell = { ...cell };
+
+        // A. Reset Traffic Lights
+        if (cleanCell.type === "traffic_light" || cleanCell.hasTrafficLight) {
+          cleanCell.lightTimer = 0;
+          cleanCell.timer = 0;
+          // Note: We keep the 'lightState' (color) so the intersection
+          // keeps its synchronized start phase (Red vs Green).
+        }
+
+        // B. Reset Spawners (Random Generator)
+        if (cleanCell.isSpawner) {
+          cleanCell.lastSpawnTick = 0;
+          cleanCell.nextSpawnTick = null; // Setting to null triggers a fresh random calculation
+        }
+
+        // C. Remove any existing cars (Optional, but cleaner for a fresh start)
+        // if (cleanCell.hasCar) {
+        //   cleanCell.hasCar = false;
+        //   cleanCell.carConfig = undefined;
+        //   cleanCell.movementProgress = 0;
+        // }
+
+        return cleanCell;
+      })
+    );
+
+    // 3. Reset the Global Simulation Clock
+    globalTickRef.current = 0;
+
+    // 4. Update State
     setRows(loadedRows);
     setCols(loadedCols);
-    setGridMultiplier(loadedRows / 16); // Approximate multiplier from loaded rows
-    setHistory([parsedGrid]);
+    setGridMultiplier(loadedRows / 16);
+    setHistory([cleanGrid]); // Load the CLEAN grid, not the raw parsed one
     setStep(0);
     setIsPlaying(false);
     setPrePlayStep(null);
@@ -1680,33 +1847,41 @@ export default function App() {
                       >
                         Any
                       </button>
-                      {["up", "down", "left", "right"].map((dir) => (
-                        <button
-                          key={dir}
-                          onClick={() =>
-                            updateRoadFlow(
-                              selectedCell.row,
-                              selectedCell.col,
-                              dir
-                            )
-                          }
-                          className={`p-1 rounded text-lg border ${
-                            selectedCellData.flowDirection === dir
-                              ? "bg-emerald-600 text-white border-emerald-500"
-                              : theme === "light"
-                              ? "bg-slate-100 border-slate-300 text-slate-500"
-                              : "bg-slate-700 border-slate-600 text-slate-300"
-                          }`}
-                        >
-                          {dir === "up"
-                            ? "⬆️"
-                            : dir === "down"
-                            ? "⬇️"
-                            : dir === "left"
-                            ? "⬅️"
-                            : "➡️"}
-                        </button>
-                      ))}
+                      {["up", "down", "left", "right"].map((dir) => {
+                        // Check if this direction is active (Array or String)
+                        const currentFlow = selectedCellData.flowDirection;
+                        const isSelected = Array.isArray(currentFlow)
+                          ? currentFlow.includes(dir)
+                          : currentFlow === dir;
+
+                        return (
+                          <button
+                            key={dir}
+                            onClick={() =>
+                              updateRoadFlow(
+                                selectedCell.row,
+                                selectedCell.col,
+                                dir
+                              )
+                            }
+                            className={`p-1 rounded text-lg border ${
+                              isSelected
+                                ? "bg-emerald-600 text-white border-emerald-500"
+                                : theme === "light"
+                                ? "bg-slate-100 border-slate-300 text-slate-500"
+                                : "bg-slate-700 border-slate-600 text-slate-300"
+                            }`}
+                          >
+                            {dir === "up"
+                              ? "⬆️"
+                              : dir === "down"
+                              ? "⬇️"
+                              : dir === "left"
+                              ? "⬅️"
+                              : "➡️"}
+                          </button>
+                        );
+                      })}
                     </div>
 
                     {/* --- NEW: SPAWNER CONFIG SECTION --- */}
@@ -1794,6 +1969,38 @@ export default function App() {
                             <span className={`text-[10px] ${T.textDim}`}>
                               Slow
                             </span>
+                          </div>
+
+                          {/* --- NEW INPUT: Max Tick Limit --- */}
+                          <div className="flex justify-between items-center gap-2 px-1">
+                            <label className={`text-[10px] ${T.textDim}`}>
+                              Stop Gen. at Tick:
+                            </label>
+                            <input
+                              type="number"
+                              min="0"
+                              placeholder="∞"
+                              className={`w-16 p-1 text-[10px] text-right rounded border outline-none focus:border-emerald-500 transition-colors ${
+                                theme === "light"
+                                  ? "bg-slate-50 border-slate-300 text-slate-900 placeholder-slate-400"
+                                  : "bg-slate-800 border-slate-600 text-white placeholder-slate-500"
+                              }`}
+                              value={
+                                selectedCellData.maxSpawnTick !== undefined &&
+                                selectedCellData.maxSpawnTick !== null
+                                  ? selectedCellData.maxSpawnTick
+                                  : ""
+                              }
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                updateSpawnerConfig(
+                                  selectedCell.row,
+                                  selectedCell.col,
+                                  "maxSpawnTick",
+                                  val === "" ? null : parseInt(val)
+                                );
+                              }}
+                            />
                           </div>
 
                           {/* --- NEW: Multi-Select Turn Priority Buttons --- */}
