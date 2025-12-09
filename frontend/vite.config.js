@@ -12,6 +12,11 @@ import react from "@vitejs/plugin-react";
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [react()],
+  test: {
+    globals: true, // <--- Enable global usage of describe, test, expect
+    environment: "jsdom", // <--- Use jsdom environment
+    setupFiles: "./src/setupTests.js", // <--- Path to setup file we will create next
+  },
   //
   // This is the most important part!
   //
